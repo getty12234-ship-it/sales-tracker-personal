@@ -2501,7 +2501,23 @@
         }
 
         function renderReviewCharts() {
-            const g = data.settings.monthly || {};
+            // メンバー選択に応じた目標を取得
+            let g = {};
+            if (selectedMember === 'all') {
+                data.members.forEach(m => {
+                    const memberGoals = getMemberGoals(m.id);
+                    g.post = (g.post || 0) + (memberGoals.post || 0);
+                    g.apoGet = (g.apoGet || 0) + (memberGoals.apoGet || 0);
+                    g.apoExec = (g.apoExec || 0) + (memberGoals.apoExec || 0);
+                    g.doinGet = (g.doinGet || 0) + (memberGoals.doinGet || 0);
+                    g.doinExec = (g.doinExec || 0) + (memberGoals.doinExec || 0);
+                    g.mendan = (g.mendan || 0) + (memberGoals.mendan || 0);
+                    g.mendanExec = (g.mendanExec || 0) + (memberGoals.mendanExec || 0);
+                    g.seiyaku = (g.seiyaku || 0) + (memberGoals.seiyaku || 0);
+                });
+            } else {
+                g = getMemberGoals(selectedMember);
+            }
             const container = document.getElementById('reviewChartsGrid');
             if (!container) return;
 
