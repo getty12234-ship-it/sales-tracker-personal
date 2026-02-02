@@ -1533,12 +1533,12 @@
         const ngReasonLabels = ['金策NG', '既婚NG', '職業NG', 'スタンスNG', '精神NG'];
 
         // パスワード認証
-        const TEAM_PASSWORD = 'Cv6bL3yZ';
+        const TEAM_PASSWORD = 'hagamori';
 
         function checkPassword() {
             const input = document.getElementById('authPassword').value;
             if (input === TEAM_PASSWORD) {
-                sessionStorage.setItem('salesTracker_auth_core', 'true');
+                sessionStorage.setItem('salesTracker_auth_personal', 'true');
                 document.getElementById('authModal').style.display = 'none';
                 document.getElementById('mainContainer').style.display = 'block';
                 initApp();
@@ -1559,7 +1559,7 @@
 
         function checkAuth() {
             // このチームの認証キーをチェック
-            if (sessionStorage.getItem('salesTracker_auth_core') === 'true') {
+            if (sessionStorage.getItem('salesTracker_auth_personal') === 'true') {
                 document.getElementById('authModal').style.display = 'none';
                 document.getElementById('mainContainer').style.display = 'block';
                 return true;
