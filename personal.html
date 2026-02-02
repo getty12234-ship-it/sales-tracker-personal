@@ -1692,6 +1692,7 @@
                 };
             }
             if (!data.weeks[k].nippo) data.weeks[k].nippo = {};
+            if (!data.weeks[k].instagram) data.weeks[k].instagram = {};
             if (!data.weeks[k].review) data.weeks[k].review = {
                 mainIssue: '', mainCause: '',
                 causeActions: [
@@ -4760,14 +4761,17 @@
         }
 
         function saveSettings() {
+            // 設定タブで選択されているメンバーを使用
+            const targetMember = settingsSelectedMember || selectedMember;
+
             // 全体選択時は保存不可
-            if (selectedMember === 'all') {
+            if (targetMember === 'all') {
                 console.log('全体選択時は保存できません');
                 return;
             }
 
             console.log('=== 設定保存 ===');
-            console.log('保存先:', selectedMember);
+            console.log('保存先:', targetMember);
 
             const budgetData = {
                 post: parseInt(document.getElementById('bPost').value) || 0,
@@ -4795,17 +4799,17 @@
             // 個別メンバーの設定として保存（月ごと）
             const monthKey = getMonthKey();
             if (!data.settings.memberSettings) data.settings.memberSettings = {};
-            if (!data.settings.memberSettings[selectedMember]) {
-                data.settings.memberSettings[selectedMember] = {};
+            if (!data.settings.memberSettings[targetMember]) {
+                data.settings.memberSettings[targetMember] = {};
             }
-            if (!data.settings.memberSettings[selectedMember][monthKey]) {
-                data.settings.memberSettings[selectedMember][monthKey] = {};
+            if (!data.settings.memberSettings[targetMember][monthKey]) {
+                data.settings.memberSettings[targetMember][monthKey] = {};
             }
-            data.settings.memberSettings[selectedMember][monthKey].budget = budgetData;
-            data.settings.memberSettings[selectedMember][monthKey].monthly = monthlyData;
+            data.settings.memberSettings[targetMember][monthKey].budget = budgetData;
+            data.settings.memberSettings[targetMember][monthKey].monthly = monthlyData;
 
             // インスタ月間目標もメンバーごとに保存
-            data.settings.memberSettings[selectedMember][monthKey].instagram = {
+            data.settings.memberSettings[targetMember][monthKey].instagram = {
                 send: parseInt(document.getElementById('igGoalSend').value) || 0,
                 reply: parseInt(document.getElementById('igGoalReply').value) || 0,
                 offer: parseInt(document.getElementById('igGoalOffer').value) || 0,
@@ -4814,7 +4818,7 @@
                 doinExec: parseInt(document.getElementById('igGoalDoinExec').value) || 0,
                 seiyaku: parseInt(document.getElementById('igGoalSeiyaku').value) || 0
             };
-            console.log('メンバー個別設定として保存しました:', selectedMember, '月:', monthKey);
+            console.log('メンバー個別設定として保存しました:', targetMember, '月:', monthKey);
 
             saveData(); renderSummary(); renderReview(); renderInstagram(); syncToCloud();
         }
