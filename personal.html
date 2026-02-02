@@ -1484,15 +1484,29 @@
             lastUpdated: null // タイムスタンプ（データ更新検知用）
         };
 
-        let currentYear = 2026;
-        let currentMonth = 1;
-        let currentWeekNum = 4;
-        let selectedMember = 'all';
+        // ページ状態をlocalStorageから復元
+        const savedState = JSON.parse(localStorage.getItem('personalTrackerState') || '{}');
+        const now = new Date();
+        let currentYear = savedState.year || now.getFullYear();
+        let currentMonth = savedState.month || (now.getMonth() + 1);
+        let currentWeekNum = savedState.week || 1;
+        let selectedMember = savedState.member || 'all';
         let selectedIgAccount = 'all'; // インスタ分析用の選択アカウント
         let syncStatus = 'local';
         let nippoViewMode = 'all'; // 'all' or 'single'
         let nippoSelectedMember = '';
-        let viewPeriod = 'week'; // 'week' or 'month'
+        let viewPeriod = savedState.viewPeriod || 'week'; // 'week' or 'month'
+
+        // ページ状態を保存
+        function savePageState() {
+            localStorage.setItem('personalTrackerState', JSON.stringify({
+                year: currentYear,
+                month: currentMonth,
+                week: currentWeekNum,
+                member: selectedMember,
+                viewPeriod: viewPeriod
+            }));
+        }
 
         // 月キーを取得（例: "2026-1"）
         function getMonthKey() {
@@ -1781,6 +1795,7 @@
                 if (currentMonth < 1) { currentMonth = 12; currentYear--; }
                 currentWeekNum = 5;
             }
+            savePageState();
             updateWeekLabel(); renderAll(); applySeasonalBackground();
         }
 
@@ -1792,6 +1807,7 @@
                 if (currentMonth > 12) { currentMonth = 1; currentYear++; }
                 currentWeekNum = 1;
             }
+            savePageState();
             updateWeekLabel(); renderAll(); applySeasonalBackground();
         }
 
@@ -1800,6 +1816,7 @@
             currentMonth--;
             if (currentMonth < 1) { currentMonth = 12; currentYear--; }
             currentWeekNum = 1;
+            savePageState();
             updateMonthLabel(); renderAll(); applySeasonalBackground();
         }
 
@@ -1808,6 +1825,7 @@
             currentMonth++;
             if (currentMonth > 12) { currentMonth = 1; currentYear++; }
             currentWeekNum = 1;
+            savePageState();
             updateMonthLabel(); renderAll(); applySeasonalBackground();
         }
 
@@ -1817,6 +1835,7 @@
             document.getElementById('btnMonth').className = 'period-btn' + (period === 'month' ? ' active' : '');
             document.getElementById('weekNav').style.display = period === 'month' ? 'none' : 'flex';
             document.getElementById('monthSelector').style.display = period === 'month' ? 'flex' : 'none';
+            savePageState();
             updateMonthLabel();
             renderAll();
         }
@@ -1836,6 +1855,7 @@
         function closeModal(id) { document.getElementById(id).classList.remove('active'); }
         function onMemberChange() {
             selectedMember = document.getElementById('memberSelect').value;
+            savePageState();
             // 全てのタブを再レンダリング
             renderAll();
             // 設定タブのメンバー選択も同期
@@ -2430,7 +2450,25 @@
         }
 
         function renderLargeCharts() {
-            const g = data.settings.monthly || {};
+            // メンバー選択に応じた目標を取得
+            let g = {};
+            if (selectedMember === 'all') {
+                // 全体選択時：全メンバーの目標を合計
+                data.members.forEach(m => {
+                    const memberGoals = getMemberGoals(m.id);
+                    g.post = (g.post || 0) + (memberGoals.post || 0);
+                    g.apoGet = (g.apoGet || 0) + (memberGoals.apoGet || 0);
+                    g.apoExec = (g.apoExec || 0) + (memberGoals.apoExec || 0);
+                    g.doinGet = (g.doinGet || 0) + (memberGoals.doinGet || 0);
+                    g.doinExec = (g.doinExec || 0) + (memberGoals.doinExec || 0);
+                    g.mendan = (g.mendan || 0) + (memberGoals.mendan || 0);
+                    g.mendanExec = (g.mendanExec || 0) + (memberGoals.mendanExec || 0);
+                    g.seiyaku = (g.seiyaku || 0) + (memberGoals.seiyaku || 0);
+                });
+            } else {
+                // 特定メンバー選択時：そのメンバーの目標
+                g = getMemberGoals(selectedMember);
+            }
             const container = document.getElementById('chartsGrid');
             if (!container) return;
 
