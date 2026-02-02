@@ -1280,7 +1280,11 @@
             <div class="section">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
                     <h2>アカウント別データ入力</h2>
-                    <button class="btn btn-primary btn-sm" onclick="addAccount()">+ アカウント追加</button>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-sm" onclick="document.getElementById('igCsvImport').click()" style="background:#059669">📥 CSVインポート</button>
+                        <input type="file" id="igCsvImport" accept=".csv" style="display:none" onchange="importInstagramCsv(this.files[0])">
+                        <button class="btn btn-primary btn-sm" onclick="addAccount()">+ アカウント追加</button>
+                    </div>
                 </div>
                 <div id="accountList"></div>
             </div>
@@ -4315,6 +4319,125 @@
             document.getElementById('newAccountName').value = '';
             document.getElementById('newAccountUrl').value = '';
             renderInstagram(); syncToCloud();
+        }
+
+        // Instagram CSVインポート
+        function importInstagramCsv(file) {
+            if (!file) return;
+
+            // ファイル名から年月週を取得 (例: instagram-2026-1-W4.csv)
+            const match = file.name.match(/instagram-(\d+)-(\d+)-W(\d+)/i);
+            if (!match) {
+                alert('ファイル名の形式が正しくありません。\n例: instagram-2026-1-W4.csv');
+                return;
+            }
+            const [, fileYear, fileMonth, fileWeek] = match.map(Number);
+            const weekKey = `${fileYear}-${fileMonth}-W${fileWeek}`;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const text = e.target.result;
+                    const lines = text.split('\n').filter(line => line.trim() && !line.startsWith('---'));
+
+                    // ヘッダーをスキップ
+                    const dataLines = lines.slice(1).filter(line => {
+                        const first = line.split(',')[0];
+                        return first && !first.includes('アカウント名') && first.trim() !== '';
+                    });
+
+                    // 曜日マッピング (土曜始まり)
+                    const dayMap = { '土': 0, '日': 1, '月': 2, '火': 3, '水': 4, '木': 5, '金': 6 };
+
+                    // データを整理
+                    const accountData = {};
+                    dataLines.forEach(line => {
+                        // CSV解析（ダブルクォート対応）
+                        const cols = line.match(/(".*?"|[^,]+)/g)?.map(c => c.replace(/^"|"$/g, '').trim()) || [];
+                        if (cols.length < 14) return;
+
+                        const accName = cols[0];
+                        const dayName = cols[1];
+                        const dayIndex = dayMap[dayName];
+
+                        if (accName && dayIndex !== undefined) {
+                            if (!accountData[accName]) {
+                                accountData[accName] = {
+                                    follow: [0,0,0,0,0,0,0],
+                                    follower: [0,0,0,0,0,0,0],
+                                    followCut: [0,0,0,0,0,0,0],
+                                    followerCut: [0,0,0,0,0,0,0],
+                                    dmSend: [0,0,0,0,0,0,0],
+                                    dmReply: [0,0,0,0,0,0,0],
+                                    dmOffer: [0,0,0,0,0,0,0],
+                                    apoGet: [0,0,0,0,0,0,0],
+                                    apoExec: [0,0,0,0,0,0,0],
+                                    doinPlan: [0,0,0,0,0,0,0],
+                                    doinExec: [0,0,0,0,0,0,0],
+                                    seiyaku: [0,0,0,0,0,0,0]
+                                };
+                            }
+                            accountData[accName].follow[dayIndex] = parseInt(cols[2]) || 0;
+                            accountData[accName].follower[dayIndex] = parseInt(cols[3]) || 0;
+                            accountData[accName].followCut[dayIndex] = parseInt(cols[4]) || 0;
+                            accountData[accName].followerCut[dayIndex] = parseInt(cols[5]) || 0;
+                            accountData[accName].dmSend[dayIndex] = parseInt(cols[6]) || 0;
+                            accountData[accName].dmReply[dayIndex] = parseInt(cols[7]) || 0;
+                            accountData[accName].dmOffer[dayIndex] = parseInt(cols[8]) || 0;
+                            accountData[accName].apoGet[dayIndex] = parseInt(cols[9]) || 0;
+                            accountData[accName].apoExec[dayIndex] = parseInt(cols[10]) || 0;
+                            accountData[accName].doinPlan[dayIndex] = parseInt(cols[11]) || 0;
+                            accountData[accName].doinExec[dayIndex] = parseInt(cols[12]) || 0;
+                            accountData[accName].seiyaku[dayIndex] = parseInt(cols[13]) || 0;
+                        }
+                    });
+
+                    // 週データを確保
+                    if (!data.weeks[weekKey]) {
+                        data.weeks[weekKey] = { daily: {}, review: {}, instagram: {}, nippo: {} };
+                    }
+                    if (!data.weeks[weekKey].instagram) {
+                        data.weeks[weekKey].instagram = {};
+                    }
+
+                    // アカウントをインポート
+                    let importedCount = 0;
+                    const currentOwnerId = selectedMember === 'all' ? (data.members[0]?.id || 'default') : selectedMember;
+
+                    Object.keys(accountData).forEach(accName => {
+                        // アカウントが存在しなければ作成
+                        let acc = data.accounts.find(a => a.name === accName);
+                        if (!acc) {
+                            acc = { id: 'acc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), name: accName, url: '', ownerId: currentOwnerId };
+                            data.accounts.push(acc);
+                        }
+
+                        // データをセット
+                        data.weeks[weekKey].instagram[acc.id] = accountData[accName];
+                        importedCount++;
+                    });
+
+                    saveData();
+                    syncToCloud();
+
+                    // インポート先の週に移動
+                    currentYear = fileYear;
+                    currentMonth = fileMonth;
+                    currentWeekNum = fileWeek;
+                    updateWeekLabel();
+                    renderAll();
+
+                    alert(`${importedCount}件のアカウントデータをインポートしました。\n(${fileYear}年${fileMonth}月 第${fileWeek}週)`);
+
+                } catch (err) {
+                    console.error('CSV import error:', err);
+                    alert('CSVの読み込みに失敗しました: ' + err.message);
+                }
+            };
+            reader.readAsText(file, 'UTF-8');
+
+            // ファイル入力をリセット
+            document.getElementById('igCsvImport').value = '';
         }
 
         // 選択されたメンバーのアカウントを取得
