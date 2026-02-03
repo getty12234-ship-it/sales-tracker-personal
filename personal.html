@@ -1484,12 +1484,19 @@
             lastUpdated: null // タイムスタンプ（データ更新検知用）
         };
 
+        // 現在の日付から週番号を計算（土曜始まり、5週制）
+        function calculateCurrentWeek(date) {
+            const day = date.getDate();
+            // 週1: 1-7, 週2: 8-14, 週3: 15-21, 週4: 22-28, 週5: 29-31
+            return Math.min(Math.ceil(day / 7), 5);
+        }
+
         // ページ状態をlocalStorageから復元
         const savedState = JSON.parse(localStorage.getItem('personalTrackerState') || '{}');
         const now = new Date();
         let currentYear = savedState.year || now.getFullYear();
         let currentMonth = savedState.month || (now.getMonth() + 1);
-        let currentWeekNum = savedState.week || 1;
+        let currentWeekNum = savedState.week || calculateCurrentWeek(now);
         let selectedMember = savedState.member || 'all';
         let selectedIgAccount = 'all'; // インスタ分析用の選択アカウント
         let syncStatus = 'local';
