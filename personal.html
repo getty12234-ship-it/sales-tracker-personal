@@ -5064,7 +5064,6 @@
             database.ref('teams/' + TEAM_ID).on('value', (snapshot) => {
                 const firebaseData = snapshot.val();
                 if (firebaseData) {
-                    const localSettings = data.settings ? { ...data.settings } : {};
                     data = { ...data, ...firebaseData };
 
                     // membersが配列であることを確認（Firebaseがオブジェクトに変換する場合がある）
@@ -5076,8 +5075,11 @@
                         data.members = [];
                     }
 
-                    data.settings = { ...firebaseData.settings, ...localSettings };
-                    localStorage.setItem('salesPro_core', JSON.stringify(data));
+                    // Firebaseの設定を優先（他のメンバーが入力したデータを正しく反映）
+                    if (firebaseData.settings) {
+                        data.settings = firebaseData.settings;
+                    }
+                    localStorage.setItem('salesPro_personal', JSON.stringify(data));
                     renderAll();
                     console.log('🔥 Firebaseからリアルタイム更新, メンバー数:', data.members.length);
                 }
