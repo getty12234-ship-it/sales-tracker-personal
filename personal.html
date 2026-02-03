@@ -4793,13 +4793,15 @@
         }
 
         function saveSettings() {
-            // 設定タブで選択されているメンバーを使用
-            const targetMember = settingsSelectedMember || selectedMember;
+            // ヘッダーで選択されているメンバーを使用（settingsSelectedMemberが'all'の場合はselectedMemberを使用）
+            const targetMember = (settingsSelectedMember && settingsSelectedMember !== 'all')
+                ? settingsSelectedMember
+                : selectedMember;
 
             // 全体選択時は保存不可
             if (targetMember === 'all') {
                 console.log('全体選択時は保存できません');
-                alert('⚠️ メンバーを選択してください\n\n「全体」選択中は目標を保存できません。\n設定タブ内のドロップダウンでメンバーを選択してから入力してください。');
+                alert('⚠️ メンバーを選択してください\n\n「全体」選択中は目標を保存できません。\nヘッダーのドロップダウンで特定のメンバーを選択してから入力してください。');
                 return;
             }
 
