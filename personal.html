@@ -3381,8 +3381,26 @@
                 }
             }
 
-            // 今日までの日割り目標を計算
-            const ig = data.settings.instagram || {};
+            // 今日までの日割り目標を計算（メンバー別設定から取得）
+            let ig = {};
+            if (selectedMember === 'all') {
+                // 全体選択時：全メンバーのインスタ目標を合計
+                data.members.forEach(m => {
+                    const monthKey = getMonthKey();
+                    const memberIg = data.settings.memberSettings?.[m.id]?.[monthKey]?.instagram || {};
+                    ig.send = (ig.send || 0) + (memberIg.send || 0);
+                    ig.reply = (ig.reply || 0) + (memberIg.reply || 0);
+                    ig.offer = (ig.offer || 0) + (memberIg.offer || 0);
+                    ig.apoGet = (ig.apoGet || 0) + (memberIg.apoGet || 0);
+                    ig.apoExec = (ig.apoExec || 0) + (memberIg.apoExec || 0);
+                    ig.doinExec = (ig.doinExec || 0) + (memberIg.doinExec || 0);
+                    ig.seiyaku = (ig.seiyaku || 0) + (memberIg.seiyaku || 0);
+                });
+            } else {
+                // 特定メンバー選択時：そのメンバーのインスタ目標
+                const monthKey = getMonthKey();
+                ig = data.settings.memberSettings?.[selectedMember]?.[monthKey]?.instagram || {};
+            }
             const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
             const today = new Date();
             const currentDay = (today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth)
