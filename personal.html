@@ -5038,13 +5038,25 @@
 
         function saveToFirebase() {
             if (!firebaseInitialized) return;
+            // 保存中表示
+            const text = document.getElementById('syncText');
+            const dot = document.getElementById('syncDot');
+            if (text) text.textContent = '💾 保存中...';
+            if (dot) dot.className = 'sync-dot syncing';
+
             const saveData = JSON.parse(JSON.stringify(data));
             database.ref('teams/' + TEAM_ID).set(saveData)
                 .then(() => {
                     console.log('🔥 Firebase保存完了');
-                    updateSyncStatus();
+                    if (text) text.textContent = '✓ 保存完了';
+                    if (dot) dot.className = 'sync-dot';
+                    setTimeout(() => { updateSyncStatus(); }, 2000);
                 })
-                .catch(err => console.error('Firebase保存エラー:', err));
+                .catch(err => {
+                    console.error('Firebase保存エラー:', err);
+                    if (text) text.textContent = '❌ 保存エラー';
+                    if (dot) dot.className = 'sync-dot offline';
+                });
         }
 
         function loadData() {
