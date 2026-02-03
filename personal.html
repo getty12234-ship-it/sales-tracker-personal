@@ -1779,12 +1779,21 @@
         function updateSyncStatus() {
             const dot = document.getElementById('syncDot');
             const text = document.getElementById('syncText');
+            const settingsStatus = document.getElementById('firebaseStatus');
             if (firebaseInitialized) {
                 dot.className = 'sync-dot';
                 text.textContent = '🔥 Firebase同期中';
+                if (settingsStatus) {
+                    settingsStatus.innerHTML = '<div style="display:flex;align-items:center;gap:8px"><span style="color:#22c55e">●</span><span>Firebase同期完了</span></div>';
+                    settingsStatus.style.background = '#1e3a2f';
+                }
             } else {
                 dot.className = 'sync-dot syncing';
                 text.textContent = '接続中...';
+                if (settingsStatus) {
+                    settingsStatus.innerHTML = '<div style="display:flex;align-items:center;gap:8px"><span style="color:#eab308">●</span><span>Firebase接続中...</span></div>';
+                    settingsStatus.style.background = '#3a3520';
+                }
             }
         }
 
