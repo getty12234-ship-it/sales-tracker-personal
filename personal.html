@@ -1719,6 +1719,41 @@
             return data.weeks[k];
         }
 
+        function getMemberReview() {
+            const w = getWeekData();
+            const mid = (selectedMember && selectedMember !== 'all')
+                ? selectedMember : data.settings.currentUserId;
+            if (!mid) {
+                return { mainIssue: '', mainCause: '', causeActions: [
+                    {cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]}
+                ], topReasonAction: '' };
+            }
+            if (!w.memberReview) w.memberReview = {};
+            if (!w.memberReview[mid]) {
+                w.memberReview[mid] = {
+                    mainIssue: '', mainCause: '',
+                    causeActions: [{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]}],
+                    topReasonAction: ''
+                };
+                if (mid === data.settings.currentUserId && w.review &&
+                    (w.review.mainIssue || w.review.mainCause || w.review.topReasonAction ||
+                     (w.review.causeActions && w.review.causeActions.some(ca => ca.cause || (ca.actions && ca.actions.length > 0))))) {
+                    w.memberReview[mid].mainIssue = w.review.mainIssue || '';
+                    w.memberReview[mid].mainCause = w.review.mainCause || '';
+                    w.memberReview[mid].topReasonAction = w.review.topReasonAction || '';
+                    if (w.review.causeActions) {
+                        w.memberReview[mid].causeActions = JSON.parse(JSON.stringify(w.review.causeActions));
+                    }
+                }
+            }
+            if (!w.memberReview[mid].causeActions) {
+                w.memberReview[mid].causeActions = [
+                    {cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]}
+                ];
+            }
+            return w.memberReview[mid];
+        }
+
         function getNippoData(memberId, dayIndex) {
             const w = getWeekData();
             const key = `${memberId}_${dayIndex}`;
@@ -2213,7 +2248,6 @@
 
         function renderReviewSummary() {
             const t = calcTotals();
-            const r = getWeekData().review;
 
             // メンバー別の目標を取得
             let g = {};
@@ -2325,7 +2359,7 @@
             // 最多理由と対策
             const topReasonLabel = topReasonIndex >= 0 ? muchakuReasonLabels[topReasonIndex] : '-';
             document.getElementById('rsTopReason').textContent = topReasonCount > 0 ? `${topReasonLabel}（${topReasonCount}件）` : '-';
-            document.getElementById('rsTopReasonAction').value = r.topReasonAction || '';
+            document.getElementById('rsTopReasonAction').value = getMemberReview().topReasonAction || '';
 
             // NG理由内訳（メンバー別に日別データから集計）
             const ngTotals = {};
@@ -2921,7 +2955,7 @@
         }
 
         function renderReview() {
-            const r = getWeekData().review;
+            const r = getMemberReview();
 
             document.getElementById('mainIssue').value = r.mainIssue || '';
             document.getElementById('mainCause').value = r.mainCause || '';
@@ -2940,7 +2974,7 @@
         }
 
         function saveReview() {
-            const r = getWeekData().review;
+            const r = getMemberReview();
             r.mainIssue = document.getElementById('mainIssue').value;
             r.mainCause = document.getElementById('mainCause').value;
             // r.muchakuOther = document.getElementById('muchakuOther').value; // UI削除済み
@@ -2949,7 +2983,7 @@
         }
 
         function saveTopReasonAction() {
-            const r = getWeekData().review;
+            const r = getMemberReview();
             r.topReasonAction = document.getElementById('rsTopReasonAction').value;
             saveData();
             syncToCloud();
@@ -3267,7 +3301,7 @@
 
         // 原因+施策
         function renderCauseActions() {
-            const r = getWeekData().review;
+            const r = getMemberReview();
             if (!r.causeActions) r.causeActions = [{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]}];
             document.getElementById('causeActionList').innerHTML = [0,1,2,3,4].map(i => {
                 const ca = r.causeActions[i] || { cause: '', actions: [] };
@@ -3296,26 +3330,26 @@
         }
 
         function updateCause(i, v) {
-            const r = getWeekData().review;
+            const r = getMemberReview();
             if (!r.causeActions[i]) r.causeActions[i] = { cause: '', actions: [] };
             r.causeActions[i].cause = v;
             saveData(); syncToCloud();
         }
 
         function addCauseAction(causeIdx) {
-            const r = getWeekData().review;
+            const r = getMemberReview();
             if (!r.causeActions[causeIdx].actions) r.causeActions[causeIdx].actions = [];
             r.causeActions[causeIdx].actions.push({ text: '', deadline: '', method: '', done: false });
             saveData(); renderCauseActions();
         }
 
         function updateCauseAction(causeIdx, actionIdx, key, value) {
-            getWeekData().review.causeActions[causeIdx].actions[actionIdx][key] = value;
+            getMemberReview().causeActions[causeIdx].actions[actionIdx][key] = value;
             saveData(); syncToCloud();
         }
 
         function toggleCauseAction(causeIdx, actionIdx) {
-            const a = getWeekData().review.causeActions[causeIdx].actions[actionIdx];
+            const a = getMemberReview().causeActions[causeIdx].actions[actionIdx];
             a.done = !a.done;
             saveData(); renderCauseActions(); syncToCloud();
         }
