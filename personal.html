@@ -5590,28 +5590,34 @@
             const dot = document.getElementById('syncDot');
 
             isSaving = true;
-            const saveDataCopy = JSON.parse(JSON.stringify(data));
-            saveDataCopy.lastUpdated = Date.now();
+            const localData = JSON.parse(JSON.stringify(data));
+            localData.lastUpdated = Date.now();
 
-            // .update()でパス別に書き込み（他データを上書きしない）
-            const updates = {};
-            updates['/teams/' + TEAM_ID + '/members'] = saveDataCopy.members;
-            updates['/teams/' + TEAM_ID + '/accounts'] = saveDataCopy.accounts;
-            updates['/teams/' + TEAM_ID + '/settings'] = saveDataCopy.settings;
-            updates['/teams/' + TEAM_ID + '/weeks'] = saveDataCopy.weeks;
-            updates['/teams/' + TEAM_ID + '/monthVideos'] = saveDataCopy.monthVideos;
-            updates['/teams/' + TEAM_ID + '/lastUpdated'] = saveDataCopy.lastUpdated;
-            if (saveDataCopy.deletedMembers) {
-                updates['/teams/' + TEAM_ID + '/deletedMembers'] = saveDataCopy.deletedMembers;
-            }
-
-            database.ref().update(updates)
-                .then(() => {
+            // トランザクションで読み取り→マージ→書き込み（他人の変更を上書きしない）
+            database.ref('teams/' + TEAM_ID).transaction(currentData => {
+                if (!currentData) return localData;
+                // Firebase上の最新データにローカルの変更をマージ
+                deepMerge(currentData, localData);
+                return currentData;
+            })
+                .then((result) => {
                     isSaving = false;
+                    // トランザクション成功後、Firebase上のマージ済みデータをローカルに反映
+                    if (result.committed && result.snapshot) {
+                        const merged = result.snapshot.val();
+                        if (merged) {
+                            deepMerge(data, merged);
+                            if (data.members && !Array.isArray(data.members))
+                                data.members = Object.values(data.members);
+                            if (data.accounts && !Array.isArray(data.accounts))
+                                data.accounts = Object.values(data.accounts);
+                            localStorage.setItem('salesPro_personal', JSON.stringify(data));
+                        }
+                    }
                     debugSaveCount++;
                     const el = document.getElementById('debugSaveCount');
                     if (el) el.textContent = '送信: ' + debugSaveCount + '回';
-                    console.log('🔥 Firebase保存完了 v3.0 (debounce+update), 送信#' + debugSaveCount);
+                    console.log('🔥 Firebase保存完了 v3.1 (transaction), 送信#' + debugSaveCount);
                     if (text) text.textContent = '✓ 保存完了';
                     if (dot) dot.className = 'sync-dot';
                     setTimeout(() => { updateSyncStatus(); }, 2000);
@@ -5669,9 +5675,8 @@
                 const firebaseData = snapshot.val();
                 if (!firebaseData) return;
 
-                // 自分の書き込み中 or ローカルに未保存の変更がある場合はスキップ
-                // （他人の保存で自分の入力中データが消えるのを防止）
-                if (isSaving || saveTimer) return;
+                // 自分の書き込み中はスキップ（トランザクション完了後に反映済み）
+                if (isSaving) return;
 
                 debugListenerCount++;
                 const now = new Date();
@@ -5684,6 +5689,21 @@
                 if (el1) el1.textContent = '同期: ' + timeStr;
                 const el2 = document.getElementById('debugListenerCount');
                 if (el2) el2.textContent = '受信: ' + debugListenerCount + '回';
+
+                // アクティブ入力欄の状態を保存（再描画後に復元するため）
+                const activeEl = document.activeElement;
+                let savedInput = null;
+                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) {
+                    savedInput = {
+                        id: activeEl.id,
+                        name: activeEl.name,
+                        value: activeEl.value,
+                        selStart: activeEl.selectionStart,
+                        selEnd: activeEl.selectionEnd,
+                        // onchange属性で要素を特定（IDがない場合）
+                        onchange: activeEl.getAttribute('onchange') || ''
+                    };
+                }
 
                 // ディープマージ（ネスト構造を保持）
                 deepMerge(data, firebaseData);
@@ -5703,11 +5723,35 @@
                 localStorage.setItem('salesPro_personal', JSON.stringify(data));
                 updateHeaderUserInfo();
                 renderAll();
-                console.log('🔥 Firebase同期完了 v3.0 (deepMerge) 受信#' + debugListenerCount + ', メンバー数:', data.members.length);
+
+                // アクティブ入力欄の復元
+                if (savedInput) {
+                    let target = null;
+                    if (savedInput.id) {
+                        target = document.getElementById(savedInput.id);
+                    }
+                    if (!target && savedInput.onchange) {
+                        target = document.querySelector('[onchange="' + CSS.escape(savedInput.onchange) + '"]')
+                            || document.querySelector('[onchange="' + savedInput.onchange.replace(/"/g, '&quot;') + '"]');
+                    }
+                    if (target) {
+                        target.focus();
+                        if (target.value !== savedInput.value) {
+                            target.value = savedInput.value;
+                        }
+                        try {
+                            if (savedInput.selStart !== null) {
+                                target.setSelectionRange(savedInput.selStart, savedInput.selEnd);
+                            }
+                        } catch(e) {}
+                    }
+                }
+
+                console.log('🔥 Firebase同期完了 v3.1 (transaction+preserve) 受信#' + debugListenerCount + ', メンバー数:', data.members.length);
             });
             firebaseInitialized = true;
             updateSyncStatus();
-            console.log('🔥 Firebaseリスナー設定完了 v3.0');
+            console.log('🔥 Firebaseリスナー設定完了 v3.1');
         }
 
         // 強制再読込: Firebaseから最新データを取得
