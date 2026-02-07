@@ -5578,8 +5578,6 @@
             saveToFirebase();
         }
 
-        let isSaving = false; // 保存中フラグ（リスナーとの競合防止）
-
         function saveToFirebase() {
             if (!firebaseInitialized) return;
             // 日次自動バックアップ（1日1回）
@@ -5594,61 +5592,15 @@
             if (text) text.textContent = '💾 保存中...';
             if (dot) dot.className = 'sync-dot syncing';
 
-            const myId = getCurrentMemberId();
-            const basePath = 'teams/' + TEAM_ID;
-            const updates = {};
-            const cloned = JSON.parse(JSON.stringify(data));
-
-            // 自分のメンバーの週次データのみ書き込み
-            if (myId && cloned.weeks) {
-                for (const weekKey in cloned.weeks) {
-                    const week = cloned.weeks[weekKey];
-                    // daily: 自分のデータだけ
-                    if (week.daily && week.daily[myId]) {
-                        updates[basePath + '/weeks/' + weekKey + '/daily/' + myId] = week.daily[myId];
-                    }
-                    // nippo: myId_ で始まるキーのみ
-                    if (week.nippo) {
-                        for (const nippoKey in week.nippo) {
-                            if (nippoKey.startsWith(myId + '_')) {
-                                updates[basePath + '/weeks/' + weekKey + '/nippo/' + nippoKey] = week.nippo[nippoKey];
-                            }
-                        }
-                    }
-                    // memberReview: 自分のだけ
-                    if (week.memberReview && week.memberReview[myId]) {
-                        updates[basePath + '/weeks/' + weekKey + '/memberReview/' + myId] = week.memberReview[myId];
-                    }
-                    // review（cases/cancels/doinMuchakuList等）→ 共有データとして全員書き込み可
-                    if (week.review) {
-                        updates[basePath + '/weeks/' + weekKey + '/review'] = week.review;
-                    }
-                    // instagram → 共有（アカウント単位）
-                    if (week.instagram) {
-                        updates[basePath + '/weeks/' + weekKey + '/instagram'] = week.instagram;
-                    }
-                }
-            }
-
-            // 共有データ
-            updates[basePath + '/members'] = cloned.members;
-            updates[basePath + '/accounts'] = cloned.accounts || [];
-            updates[basePath + '/settings'] = cloned.settings;
-            updates[basePath + '/monthVideos'] = cloned.monthVideos || {};
-            if (cloned.lastUpdated) updates[basePath + '/lastUpdated'] = cloned.lastUpdated;
-            if (cloned.deletedMembers) updates[basePath + '/deletedMembers'] = cloned.deletedMembers;
-
-            isSaving = true;
-            database.ref().update(updates)
+            const saveData = JSON.parse(JSON.stringify(data));
+            database.ref('teams/' + TEAM_ID).set(saveData)
                 .then(() => {
-                    isSaving = false;
-                    console.log('🔥 Firebase差分保存完了');
+                    console.log('🔥 Firebase保存完了');
                     if (text) text.textContent = '✓ 保存完了';
                     if (dot) dot.className = 'sync-dot';
                     setTimeout(() => { updateSyncStatus(); }, 2000);
                 })
                 .catch(err => {
-                    isSaving = false;
                     console.error('Firebase保存エラー:', err);
                     if (text) text.textContent = '❌ 保存エラー';
                     if (dot) dot.className = 'sync-dot offline';
