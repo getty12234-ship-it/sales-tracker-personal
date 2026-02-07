@@ -1381,6 +1381,12 @@
                     <h3 style="color:#f59e0b;font-size:14px;margin-bottom:12px">管理者メニュー</h3>
                     <div id="userMapList" style="margin-bottom:12px"></div>
                     <button class="btn" style="background:#f59e0b;color:#000;font-size:12px;margin-right:8px" onclick="renderUserMapAdmin()">ユーザー紐付け一覧を更新</button>
+                    <button class="btn" style="background:#6366f1;font-size:12px;margin-right:8px" onclick="showRelinkForm()">自分のメンバーを再紐付け</button>
+                    <div id="relinkForm" style="display:none;margin-top:12px;padding:12px;background:#1e293b;border-radius:8px">
+                        <label style="font-size:13px;color:#94a3b8">紐付けるメンバーを選択:</label>
+                        <select id="relinkSelect" style="width:100%;padding:8px;margin:8px 0;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px"></select>
+                        <button class="btn" style="background:#22c55e;font-size:12px" onclick="relinkMember()">紐付けを更新</button>
+                    </div>
                 </div>
             </div>
 
@@ -1865,6 +1871,22 @@
                     currentAuthUser = user;
                     showAuthLoading();
                     loadData();
+                    // Firebaseから最新データを取得してからメンバー紐付けを行う
+                    try {
+                        const snapshot = await database.ref('teams/' + TEAM_ID).once('value');
+                        const fbData = snapshot.val();
+                        if (fbData) {
+                            if (fbData.members) {
+                                data.members = Array.isArray(fbData.members) ? fbData.members : Object.values(fbData.members);
+                            }
+                            if (fbData.accounts) data.accounts = Array.isArray(fbData.accounts) ? fbData.accounts : Object.values(fbData.accounts);
+                            if (fbData.settings) data.settings = fbData.settings;
+                            if (fbData.weeks) data.weeks = fbData.weeks;
+                            if (fbData.monthVideos) data.monthVideos = fbData.monthVideos;
+                        }
+                    } catch (e) {
+                        console.error('初回データ取得エラー:', e);
+                    }
                     const hasMapping = await loadUserMap();
                     if (hasMapping) {
                         // マッピングあり → アプリ表示
@@ -5350,6 +5372,33 @@
             }
             html += '</table>';
             listEl.innerHTML = html;
+        }
+
+        function showRelinkForm() {
+            const form = document.getElementById('relinkForm');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+            const select = document.getElementById('relinkSelect');
+            select.innerHTML = '<option value="">-- メンバーを選択 --</option>';
+            data.members.forEach(m => {
+                select.innerHTML += `<option value="${m.id}">${m.name}</option>`;
+            });
+        }
+
+        async function relinkMember() {
+            const memberId = document.getElementById('relinkSelect').value;
+            if (!memberId) { alert('メンバーを選択してください'); return; }
+            const uid = currentAuthUser.uid;
+            try {
+                await database.ref('teams/' + TEAM_ID + '/userMap/' + uid + '/memberId').set(memberId);
+                userMap[uid].memberId = memberId;
+                currentMemberId = memberId;
+                document.getElementById('relinkForm').style.display = 'none';
+                updateHeaderUserInfo();
+                renderAll();
+                alert('紐付けを更新しました: ' + (data.members.find(m => m.id === memberId)?.name || memberId));
+            } catch (err) {
+                alert('更新失敗: ' + err.message);
+            }
         }
 
         function addMember() {
