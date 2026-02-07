@@ -5683,31 +5683,6 @@
             }
         }
 
-        // 再描画前にフォーカス中の入力値をdataに保存する
-        function saveActiveInputValue() {
-            const el = document.activeElement;
-            if (!el || !el.matches('input, textarea')) return null;
-            // onchangeを手動発火して現在の入力値をdataに反映
-            if (el.onchange) {
-                el.onchange();
-            } else {
-                // インラインonchangeの場合はイベントをディスパッチ
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            // フォーカス復元用の情報を返す
-            return {
-                tag: el.tagName,
-                type: el.type,
-                id: el.id,
-                name: el.name,
-                // グリッド内inputの位置特定用
-                parentHTML: el.parentElement ? el.parentElement.innerHTML.substring(0, 50) : '',
-                value: el.value,
-                selectionStart: el.selectionStart,
-                selectionEnd: el.selectionEnd
-            };
-        }
-
         function setupFirebaseListener() {
             database.ref('teams/' + TEAM_ID).on('value', (snapshot) => {
                 const firebaseData = snapshot.val();
@@ -5715,76 +5690,79 @@
 
                 const myId = getCurrentMemberId();
 
-                // 共有データはFirebaseから取得
-                if (firebaseData.members) {
-                    data.members = firebaseData.members;
-                    if (!Array.isArray(data.members)) {
-                        data.members = Object.values(data.members);
+                // 自分のデータを退避（Firebaseマージで上書きされないように）
+                const myBackup = {};
+                if (myId && data.weeks) {
+                    for (const weekKey in data.weeks) {
+                        const w = data.weeks[weekKey];
+                        myBackup[weekKey] = {};
+                        if (w.daily && w.daily[myId]) {
+                            myBackup[weekKey].daily = JSON.parse(JSON.stringify(w.daily[myId]));
+                        }
+                        if (w.nippo) {
+                            myBackup[weekKey].nippo = {};
+                            for (const key in w.nippo) {
+                                if (key.startsWith(myId + '_')) {
+                                    myBackup[weekKey].nippo[key] = JSON.parse(JSON.stringify(w.nippo[key]));
+                                }
+                            }
+                        }
+                        if (w.memberReview && w.memberReview[myId]) {
+                            myBackup[weekKey].memberReview = JSON.parse(JSON.stringify(w.memberReview[myId]));
+                        }
                     }
+                }
+
+                // Firebaseデータで全体を上書き（元々動いていた方式）
+                data = { ...data, ...firebaseData };
+
+                // membersが配列であることを確認
+                if (data.members && !Array.isArray(data.members)) {
+                    data.members = Object.values(data.members);
                 }
                 if (!data.members) data.members = [];
+                if (data.accounts && !Array.isArray(data.accounts)) {
+                    data.accounts = Object.values(data.accounts);
+                }
 
-                if (firebaseData.accounts) data.accounts = firebaseData.accounts;
-                if (!Array.isArray(data.accounts)) data.accounts = data.accounts ? Object.values(data.accounts) : [];
+                // Firebaseの設定を優先
+                if (firebaseData.settings) {
+                    data.settings = firebaseData.settings;
+                }
 
-                if (firebaseData.settings) data.settings = firebaseData.settings;
-                if (firebaseData.monthVideos) data.monthVideos = firebaseData.monthVideos;
-                if (firebaseData.deletedMembers) data.deletedMembers = firebaseData.deletedMembers;
-                if (firebaseData.lastUpdated) data.lastUpdated = firebaseData.lastUpdated;
-
-                // 週次データ: 自分のデータは常にローカル保持、他ユーザーのみFirebaseから取得
-                if (firebaseData.weeks) {
-                    if (!data.weeks) data.weeks = {};
-                    for (const weekKey in firebaseData.weeks) {
-                        if (!data.weeks[weekKey]) data.weeks[weekKey] = {};
-                        const fbWeek = firebaseData.weeks[weekKey];
-                        const localWeek = data.weeks[weekKey];
-
-                        // daily: 自分のデータは常にスキップ
-                        if (fbWeek.daily) {
-                            if (!localWeek.daily) localWeek.daily = {};
-                            for (const memberId in fbWeek.daily) {
-                                if (memberId === myId) continue;
-                                localWeek.daily[memberId] = fbWeek.daily[memberId];
+                // 自分のデータを復元
+                if (myId) {
+                    for (const weekKey in myBackup) {
+                        if (!data.weeks[weekKey]) continue;
+                        const w = data.weeks[weekKey];
+                        const backup = myBackup[weekKey];
+                        // daily復元
+                        if (backup.daily) {
+                            if (!w.daily) w.daily = {};
+                            w.daily[myId] = backup.daily;
+                        }
+                        // nippo復元
+                        if (backup.nippo) {
+                            if (!w.nippo) w.nippo = {};
+                            for (const key in backup.nippo) {
+                                w.nippo[key] = backup.nippo[key];
                             }
                         }
-
-                        // nippo: 自分のデータは常にスキップ
-                        if (fbWeek.nippo) {
-                            if (!localWeek.nippo) localWeek.nippo = {};
-                            for (const nippoKey in fbWeek.nippo) {
-                                if (myId && nippoKey.startsWith(myId + '_')) continue;
-                                localWeek.nippo[nippoKey] = fbWeek.nippo[nippoKey];
-                            }
+                        // memberReview復元
+                        if (backup.memberReview) {
+                            if (!w.memberReview) w.memberReview = {};
+                            w.memberReview[myId] = backup.memberReview;
                         }
-
-                        // memberReview: 自分のデータは常にスキップ
-                        if (fbWeek.memberReview) {
-                            if (!localWeek.memberReview) localWeek.memberReview = {};
-                            for (const memberId in fbWeek.memberReview) {
-                                if (memberId === myId) continue;
-                                localWeek.memberReview[memberId] = fbWeek.memberReview[memberId];
-                            }
-                        }
-
-                        // review（共有データ）
-                        if (fbWeek.review) localWeek.review = fbWeek.review;
-
-                        // instagram（共有データ）
-                        if (fbWeek.instagram) localWeek.instagram = fbWeek.instagram;
                     }
                 }
 
-                // userMapの更新もキャッチ
+                // userMapの更新
                 if (firebaseData.userMap) userMap = firebaseData.userMap;
 
                 localStorage.setItem('salesPro_personal', JSON.stringify(data));
                 updateHeaderUserInfo();
-
-                // 入力中の値をdataに保存してから常に再描画
-                saveActiveInputValue();
                 renderAll();
-                console.log('🔥 Firebaseからスマートマージ更新, メンバー数:', data.members.length);
+                console.log('🔥 Firebase同期完了, メンバー数:', data.members.length);
             });
             firebaseInitialized = true;
             updateSyncStatus();
