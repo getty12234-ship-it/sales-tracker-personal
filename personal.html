@@ -5683,12 +5683,28 @@
             }
         }
 
+        // 入力中フラグ（フォーカス中のinput/textareaがあるか）
+        let isUserEditing = false;
+        let pendingRender = false;
+
+        document.addEventListener('focusin', (e) => {
+            if (e.target.matches('input, textarea, select')) isUserEditing = true;
+        });
+        document.addEventListener('focusout', (e) => {
+            if (e.target.matches('input, textarea, select')) {
+                isUserEditing = false;
+                if (pendingRender) {
+                    pendingRender = false;
+                    renderAll();
+                }
+            }
+        });
+
         function setupFirebaseListener() {
             database.ref('teams/' + TEAM_ID).on('value', (snapshot) => {
                 const firebaseData = snapshot.val();
                 if (!firebaseData) return;
 
-                // 保存中は自分のデータの上書きをスキップ（エコーバック防止）
                 const myId = getCurrentMemberId();
 
                 // 共有データはFirebaseから取得
@@ -5708,7 +5724,7 @@
                 if (firebaseData.deletedMembers) data.deletedMembers = firebaseData.deletedMembers;
                 if (firebaseData.lastUpdated) data.lastUpdated = firebaseData.lastUpdated;
 
-                // 週次データ: 他ユーザーのデータはFirebaseから、自分のデータはローカル保持（保存中の場合）
+                // 週次データ: 自分のデータは常にローカル保持、他ユーザーのみFirebaseから取得
                 if (firebaseData.weeks) {
                     if (!data.weeks) data.weeks = {};
                     for (const weekKey in firebaseData.weeks) {
@@ -5716,29 +5732,29 @@
                         const fbWeek = firebaseData.weeks[weekKey];
                         const localWeek = data.weeks[weekKey];
 
-                        // daily
+                        // daily: 自分のデータは常にスキップ
                         if (fbWeek.daily) {
                             if (!localWeek.daily) localWeek.daily = {};
                             for (const memberId in fbWeek.daily) {
-                                if (memberId === myId && isSaving) continue; // 保存中は自分を上書きしない
+                                if (memberId === myId) continue;
                                 localWeek.daily[memberId] = fbWeek.daily[memberId];
                             }
                         }
 
-                        // nippo
+                        // nippo: 自分のデータは常にスキップ
                         if (fbWeek.nippo) {
                             if (!localWeek.nippo) localWeek.nippo = {};
                             for (const nippoKey in fbWeek.nippo) {
-                                if (myId && nippoKey.startsWith(myId + '_') && isSaving) continue;
+                                if (myId && nippoKey.startsWith(myId + '_')) continue;
                                 localWeek.nippo[nippoKey] = fbWeek.nippo[nippoKey];
                             }
                         }
 
-                        // memberReview
+                        // memberReview: 自分のデータは常にスキップ
                         if (fbWeek.memberReview) {
                             if (!localWeek.memberReview) localWeek.memberReview = {};
                             for (const memberId in fbWeek.memberReview) {
-                                if (memberId === myId && isSaving) continue;
+                                if (memberId === myId) continue;
                                 localWeek.memberReview[memberId] = fbWeek.memberReview[memberId];
                             }
                         }
@@ -5756,8 +5772,15 @@
 
                 localStorage.setItem('salesPro_personal', JSON.stringify(data));
                 updateHeaderUserInfo();
-                renderAll();
-                console.log('🔥 Firebaseからスマートマージ更新, メンバー数:', data.members.length);
+
+                // 入力中なら再描画を遅延（未保存の入力値を守る）
+                if (isUserEditing) {
+                    pendingRender = true;
+                    console.log('🔥 Firebase更新受信（入力中のため再描画を保留）');
+                } else {
+                    renderAll();
+                    console.log('🔥 Firebaseからスマートマージ更新, メンバー数:', data.members.length);
+                }
             });
             firebaseInitialized = true;
             updateSyncStatus();
