@@ -5683,22 +5683,30 @@
             }
         }
 
-        // 入力中フラグ（フォーカス中のinput/textareaがあるか）
-        let isUserEditing = false;
-        let pendingRender = false;
-
-        document.addEventListener('focusin', (e) => {
-            if (e.target.matches('input, textarea, select')) isUserEditing = true;
-        });
-        document.addEventListener('focusout', (e) => {
-            if (e.target.matches('input, textarea, select')) {
-                isUserEditing = false;
-                if (pendingRender) {
-                    pendingRender = false;
-                    renderAll();
-                }
+        // 再描画前にフォーカス中の入力値をdataに保存する
+        function saveActiveInputValue() {
+            const el = document.activeElement;
+            if (!el || !el.matches('input, textarea')) return null;
+            // onchangeを手動発火して現在の入力値をdataに反映
+            if (el.onchange) {
+                el.onchange();
+            } else {
+                // インラインonchangeの場合はイベントをディスパッチ
+                el.dispatchEvent(new Event('change', { bubbles: true }));
             }
-        });
+            // フォーカス復元用の情報を返す
+            return {
+                tag: el.tagName,
+                type: el.type,
+                id: el.id,
+                name: el.name,
+                // グリッド内inputの位置特定用
+                parentHTML: el.parentElement ? el.parentElement.innerHTML.substring(0, 50) : '',
+                value: el.value,
+                selectionStart: el.selectionStart,
+                selectionEnd: el.selectionEnd
+            };
+        }
 
         function setupFirebaseListener() {
             database.ref('teams/' + TEAM_ID).on('value', (snapshot) => {
@@ -5773,14 +5781,10 @@
                 localStorage.setItem('salesPro_personal', JSON.stringify(data));
                 updateHeaderUserInfo();
 
-                // 入力中なら再描画を遅延（未保存の入力値を守る）
-                if (isUserEditing) {
-                    pendingRender = true;
-                    console.log('🔥 Firebase更新受信（入力中のため再描画を保留）');
-                } else {
-                    renderAll();
-                    console.log('🔥 Firebaseからスマートマージ更新, メンバー数:', data.members.length);
-                }
+                // 入力中の値をdataに保存してから常に再描画
+                saveActiveInputValue();
+                renderAll();
+                console.log('🔥 Firebaseからスマートマージ更新, メンバー数:', data.members.length);
             });
             firebaseInitialized = true;
             updateSyncStatus();
