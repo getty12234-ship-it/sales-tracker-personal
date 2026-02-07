@@ -5669,8 +5669,9 @@
                 const firebaseData = snapshot.val();
                 if (!firebaseData) return;
 
-                // 自分の書き込みによる発火はスキップ（不要な再描画を防止）
-                if (isSaving) return;
+                // 自分の書き込み中 or ローカルに未保存の変更がある場合はスキップ
+                // （他人の保存で自分の入力中データが消えるのを防止）
+                if (isSaving || saveTimer) return;
 
                 debugListenerCount++;
                 const now = new Date();
