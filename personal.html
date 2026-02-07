@@ -2403,36 +2403,15 @@
             const currentDay = (today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth)
                 ? today.getDate() : daysInMonth;
 
-            // 週次表示の場合：今週の中で今日が何日目かを計算
-            let targetMultiplier = 1;
-            if (viewPeriod === 'week') {
-                const dates = getWeekDates();
-                const weekStart = dates[0];
-                const weekEnd = dates[6];
-
-                // 今日がこの週の範囲内にあるか
-                if (today >= weekStart && today <= weekEnd) {
-                    // 週の開始から今日まで何日経過したか（1〜7）
-                    const daysSinceWeekStart = Math.floor((today - weekStart) / (1000 * 60 * 60 * 24)) + 1;
-                    targetMultiplier = daysSinceWeekStart / 7;
-                } else if (today > weekEnd) {
-                    // 過去の週なら100%
-                    targetMultiplier = 1;
-                } else {
-                    // 未来の週なら0%
-                    targetMultiplier = 0;
-                }
-            }
-
             // 目標を計算する関数
             const getTarget = (monthlyGoal) => {
                 if (viewPeriod === 'month') {
                     // 月次：今日までの日割り目標
                     return (monthlyGoal / daysInMonth) * currentDay;
                 } else {
-                    // 週次：週の目標 × 週内の経過日数割合
+                    // 週次：月間目標を日割り×7日（どの週でも同じ目標）
                     const weeklyGoal = monthlyGoal / daysInMonth * 7;
-                    return weeklyGoal * targetMultiplier;
+                    return weeklyGoal;
                 }
             };
 
