@@ -7,6 +7,7 @@
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script>
         // Firebase設定
         const firebaseConfig = {
@@ -20,6 +21,7 @@
         };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
+        const auth = firebase.auth();
         const TEAM_ID = 'personal'; // パーソナル専用
     </script>
     <style>
@@ -789,19 +791,72 @@
     </style>
 </head>
 <body>
-    <!-- パスワード認証モーダル -->
+    <!-- Firebase認証モーダル -->
     <div id="authModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;align-items:center;justify-content:center">
-        <div style="background:#1e293b;padding:40px;border-radius:16px;text-align:center;max-width:400px;width:90%">
+        <div style="background:#1e293b;padding:40px;border-radius:16px;text-align:center;max-width:420px;width:90%">
             <h2 style="color:#6366f1;margin-bottom:8px">🔐 パーソナル施策ツール</h2>
             <p style="color:#94a3b8;font-size:14px;margin-bottom:24px">チームメンバー専用ページです</p>
-            <input type="password" id="authPassword" placeholder="パスワードを入力"
-                   style="width:100%;padding:12px 16px;font-size:16px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:16px"
-                   onkeypress="if(event.key==='Enter')checkPassword()">
-            <button onclick="checkPassword()"
-                    style="width:100%;padding:12px;font-size:16px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600">
-                ログイン
-            </button>
-            <p id="authError" style="color:#ef4444;margin-top:12px;font-size:13px;display:none">パスワードが違います</p>
+
+            <!-- ログインフォーム -->
+            <div id="loginForm">
+                <input type="email" id="loginEmail" placeholder="メールアドレス"
+                       style="width:100%;padding:12px 16px;font-size:15px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:10px"
+                       onkeypress="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+                <input type="password" id="loginPassword" placeholder="パスワード"
+                       style="width:100%;padding:12px 16px;font-size:15px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:16px"
+                       onkeypress="if(event.key==='Enter')handleEmailLogin()">
+                <button onclick="handleEmailLogin()" id="loginBtn"
+                        style="width:100%;padding:12px;font-size:16px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600">
+                    ログイン
+                </button>
+                <p style="color:#94a3b8;font-size:13px;margin-top:16px">
+                    アカウントがない場合は
+                    <a href="#" onclick="showSignupForm();return false" style="color:#6366f1;text-decoration:underline">新規登録</a>
+                </p>
+            </div>
+
+            <!-- 新規登録フォーム -->
+            <div id="signupForm" style="display:none">
+                <input type="email" id="signupEmail" placeholder="メールアドレス"
+                       style="width:100%;padding:12px 16px;font-size:15px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:10px">
+                <input type="password" id="signupPassword" placeholder="パスワード（6文字以上）"
+                       style="width:100%;padding:12px 16px;font-size:15px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:10px">
+                <input type="password" id="teamPasswordInput" placeholder="チームパスワード"
+                       style="width:100%;padding:12px 16px;font-size:15px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:16px"
+                       onkeypress="if(event.key==='Enter')handleSignup()">
+                <button onclick="handleSignup()" id="signupBtn"
+                        style="width:100%;padding:12px;font-size:16px;background:#22c55e;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600">
+                    新規登録
+                </button>
+                <p style="color:#94a3b8;font-size:13px;margin-top:16px">
+                    既にアカウントがある場合は
+                    <a href="#" onclick="showLoginForm();return false" style="color:#6366f1;text-decoration:underline">ログイン</a>
+                </p>
+            </div>
+
+            <!-- メンバー紐付けフォーム -->
+            <div id="memberLinkForm" style="display:none">
+                <p style="color:#e2e8f0;font-size:15px;margin-bottom:16px">あなたのメンバーを選択してください</p>
+                <select id="memberLinkSelect"
+                        style="width:100%;padding:12px 16px;font-size:15px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:16px">
+                    <option value="">-- メンバーを選択 --</option>
+                </select>
+                <button onclick="linkMember()" id="linkBtn"
+                        style="width:100%;padding:12px;font-size:16px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600">
+                    紐付けして開始
+                </button>
+            </div>
+
+            <!-- ローディング -->
+            <div id="authLoading" style="display:none">
+                <div style="color:#94a3b8;font-size:14px;padding:20px">
+                    <div style="margin-bottom:12px">⏳</div>
+                    認証中...
+                </div>
+            </div>
+
+            <!-- エラー表示 -->
+            <p id="authError" style="color:#ef4444;margin-top:12px;font-size:13px;display:none"></p>
         </div>
     </div>
 
@@ -813,6 +868,12 @@
                 <div class="sync-status">
                     <div class="sync-dot" id="syncDot"></div>
                     <span id="syncText">ローカル保存</span>
+                </div>
+                <div id="headerUserInfo" style="display:none;align-items:center;gap:8px;margin-left:auto;font-size:13px">
+                    <span id="headerUserName" style="color:#e2e8f0"></span>
+                    <span id="headerAdminBadge" style="display:none;background:#f59e0b;color:#000;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">管理者</span>
+                    <button id="headerAdminEditBtn" style="display:none;padding:4px 10px;font-size:11px;background:#334155;color:#e2e8f0;border:1px solid #475569;border-radius:6px;cursor:pointer" onclick="toggleAdminEdit()">管理者編集: OFF</button>
+                    <button onclick="handleLogout()" style="padding:4px 10px;font-size:11px;background:#475569;color:#e2e8f0;border:none;border-radius:6px;cursor:pointer">ログアウト</button>
                 </div>
             </div>
             <div class="header-controls">
@@ -1304,16 +1365,22 @@
             </div>
 
             <div class="section" style="background:#1e293b;border:2px solid #3b82f6;padding:20px;border-radius:12px">
-                <h2 style="color:#3b82f6">👤 あなたは誰ですか？</h2>
-                <p style="font-size:13px;color:#94a3b8;margin:12px 0">データの安全のため、自分のメンバーを選択してください。同期時に他のメンバーのデータを保護します。</p>
-                <div class="form-group">
-                    <label>現在のユーザー</label>
-                    <select id="currentUserSelect" onchange="saveCurrentUser()" style="width:100%;max-width:300px">
-                        <option value="">-- 選択してください --</option>
-                    </select>
+                <h2 style="color:#3b82f6">👤 ログイン情報</h2>
+                <div id="authInfoDisplay" style="margin-top:12px">
+                    <div style="display:grid;grid-template-columns:100px 1fr;gap:8px;font-size:14px">
+                        <span style="color:#94a3b8">ユーザー名:</span>
+                        <span id="settingsUserName" style="color:#e2e8f0;font-weight:600"></span>
+                        <span style="color:#94a3b8">メール:</span>
+                        <span id="settingsUserEmail" style="color:#e2e8f0"></span>
+                        <span style="color:#94a3b8">権限:</span>
+                        <span id="settingsUserRole" style="color:#e2e8f0"></span>
+                    </div>
                 </div>
-                <div id="currentUserWarning" style="display:none;margin-top:12px;padding:12px;background:#7c2d12;border-left:4px solid #ea580c;border-radius:6px;font-size:12px;color:#fed7aa">
-                    ⚠️ ユーザーを選択していません。同期機能を使う前に必ず選択してください。
+                <!-- 管理者メニュー -->
+                <div id="adminMenu" style="display:none;margin-top:16px;padding:16px;background:#0f172a;border-radius:8px;border:1px solid #334155">
+                    <h3 style="color:#f59e0b;font-size:14px;margin-bottom:12px">管理者メニュー</h3>
+                    <div id="userMapList" style="margin-bottom:12px"></div>
+                    <button class="btn" style="background:#f59e0b;color:#000;font-size:12px;margin-right:8px" onclick="renderUserMapAdmin()">ユーザー紐付け一覧を更新</button>
                 </div>
             </div>
 
@@ -1374,6 +1441,18 @@
                     <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">データインポート</button>
                     <button class="btn btn-danger" onclick="clearData()">全データ削除</button>
                     <button class="btn btn-danger" onclick="resetLocalOnly()">ローカルデータをリセット</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>バックアップ管理</h2>
+                <p style="font-size:12px;color:#94a3b8;margin-bottom:12px">インポート前・1日1回の自動バックアップが作成されます（最新20件保持）</p>
+                <div style="display:flex;gap:10px;margin-bottom:12px">
+                    <button class="btn btn-primary" onclick="createManualBackup()">今すぐバックアップ</button>
+                    <button class="btn btn-secondary" onclick="loadBackupList()">一覧を更新</button>
+                </div>
+                <div id="backupList" style="max-height:400px;overflow-y:auto">
+                    <p style="color:#64748b;font-size:13px">読み込み中...</p>
                 </div>
             </div>
         </div>
@@ -1504,6 +1583,13 @@
         let nippoSelectedMember = '';
         let viewPeriod = savedState.viewPeriod || 'week'; // 'week' or 'month'
 
+        // Firebase Auth 関連
+        let currentAuthUser = null;   // firebase.User
+        let currentMemberId = null;   // authから導出したmemberId
+        let isAdmin = false;          // userMapのisAdminフラグ
+        let adminEditMode = false;    // 管理者編集モードON/OFF
+        let userMap = {};             // teams/personal/userMap のキャッシュ
+
         // ページ状態を保存
         function savePageState() {
             localStorage.setItem('personalTrackerState', JSON.stringify({
@@ -1557,20 +1643,250 @@
         const muchakuReasonLabels = ['こだわりが強い', '横槍', '勧誘ブロック', '不安が強い', '今じゃない', '完全副業ニーズ', 'その他'];
         const ngReasonLabels = ['金策NG', '既婚NG', '職業NG', 'スタンスNG', '精神NG'];
 
-        // パスワード認証
+        // チームパスワード（新規登録時のゲート用）
         const TEAM_PASSWORD = 'hagamori';
 
-        function checkPassword() {
-            const input = document.getElementById('authPassword').value;
-            if (input === TEAM_PASSWORD) {
-                sessionStorage.setItem('salesTracker_auth_personal', 'true');
+        // --- Firebase Auth 関数群 ---
+
+        function showAuthError(msg) {
+            const el = document.getElementById('authError');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+        function hideAuthError() {
+            document.getElementById('authError').style.display = 'none';
+        }
+        function showLoginForm() {
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('signupForm').style.display = 'none';
+            document.getElementById('memberLinkForm').style.display = 'none';
+            document.getElementById('authLoading').style.display = 'none';
+            hideAuthError();
+        }
+        function showSignupForm() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('signupForm').style.display = 'block';
+            document.getElementById('memberLinkForm').style.display = 'none';
+            document.getElementById('authLoading').style.display = 'none';
+            hideAuthError();
+        }
+        function showAuthLoading() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('signupForm').style.display = 'none';
+            document.getElementById('memberLinkForm').style.display = 'none';
+            document.getElementById('authLoading').style.display = 'block';
+            hideAuthError();
+        }
+
+        async function handleEmailLogin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            if (!email || !password) { showAuthError('メールアドレスとパスワードを入力してください'); return; }
+            hideAuthError();
+            const btn = document.getElementById('loginBtn');
+            btn.disabled = true; btn.textContent = 'ログイン中...';
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                // onAuthStateChanged が処理を引き継ぐ
+            } catch (err) {
+                console.error('ログインエラー:', err);
+                const msgs = {
+                    'auth/user-not-found': 'アカウントが見つかりません',
+                    'auth/wrong-password': 'パスワードが正しくありません',
+                    'auth/invalid-email': 'メールアドレスの形式が正しくありません',
+                    'auth/too-many-requests': 'ログイン試行が多すぎます。しばらく待ってください',
+                    'auth/invalid-credential': 'メールアドレスまたはパスワードが正しくありません'
+                };
+                showAuthError(msgs[err.code] || 'ログインエラー: ' + err.message);
+                btn.disabled = false; btn.textContent = 'ログイン';
+            }
+        }
+
+        async function handleSignup() {
+            const email = document.getElementById('signupEmail').value.trim();
+            const password = document.getElementById('signupPassword').value;
+            const teamPw = document.getElementById('teamPasswordInput').value;
+            if (!email || !password) { showAuthError('メールアドレスとパスワードを入力してください'); return; }
+            if (password.length < 6) { showAuthError('パスワードは6文字以上にしてください'); return; }
+            if (teamPw !== TEAM_PASSWORD) { showAuthError('チームパスワードが正しくありません'); return; }
+            hideAuthError();
+            const btn = document.getElementById('signupBtn');
+            btn.disabled = true; btn.textContent = '登録中...';
+            try {
+                await auth.createUserWithEmailAndPassword(email, password);
+                // onAuthStateChanged が処理を引き継ぐ
+            } catch (err) {
+                console.error('新規登録エラー:', err);
+                const msgs = {
+                    'auth/email-already-in-use': 'このメールアドレスは既に登録されています',
+                    'auth/invalid-email': 'メールアドレスの形式が正しくありません',
+                    'auth/weak-password': 'パスワードが弱すぎます（6文字以上）'
+                };
+                showAuthError(msgs[err.code] || '登録エラー: ' + err.message);
+                btn.disabled = false; btn.textContent = '新規登録';
+            }
+        }
+
+        async function handleLogout() {
+            if (!confirm('ログアウトしますか？')) return;
+            try {
+                await auth.signOut();
+                currentAuthUser = null;
+                currentMemberId = null;
+                isAdmin = false;
+                adminEditMode = false;
+                userMap = {};
+                document.getElementById('mainContainer').style.display = 'none';
+                document.getElementById('authModal').style.display = 'flex';
+                showLoginForm();
+            } catch (err) {
+                console.error('ログアウトエラー:', err);
+            }
+        }
+
+        async function loadUserMap() {
+            try {
+                const snapshot = await database.ref('teams/' + TEAM_ID + '/userMap').once('value');
+                userMap = snapshot.val() || {};
+                const uid = currentAuthUser.uid;
+                if (userMap[uid]) {
+                    currentMemberId = userMap[uid].memberId;
+                    isAdmin = !!userMap[uid].isAdmin;
+                    return true; // マッピングあり
+                }
+                return false; // マッピングなし
+            } catch (err) {
+                console.error('userMap読み込みエラー:', err);
+                return false;
+            }
+        }
+
+        function showMemberLinkForm() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('signupForm').style.display = 'none';
+            document.getElementById('authLoading').style.display = 'none';
+            document.getElementById('memberLinkForm').style.display = 'block';
+            hideAuthError();
+
+            // 既にマッピングされているメンバーIDを収集
+            const linkedMemberIds = new Set();
+            for (const uid in userMap) {
+                if (userMap[uid].memberId) linkedMemberIds.add(userMap[uid].memberId);
+            }
+
+            const select = document.getElementById('memberLinkSelect');
+            select.innerHTML = '<option value="">-- メンバーを選択 --</option>';
+            data.members.forEach(m => {
+                if (!linkedMemberIds.has(m.id)) {
+                    select.innerHTML += `<option value="${m.id}">${m.name}</option>`;
+                }
+            });
+            // リンク可能なメンバーがない場合
+            if (data.members.length === 0) {
+                select.innerHTML += '<option value="" disabled>（メンバーが登録されていません。管理者に連絡してください）</option>';
+            } else if (select.options.length === 1) {
+                select.innerHTML += '<option value="" disabled>（全メンバーが紐付け済みです）</option>';
+            }
+        }
+
+        async function linkMember() {
+            const memberId = document.getElementById('memberLinkSelect').value;
+            if (!memberId) { showAuthError('メンバーを選択してください'); return; }
+            hideAuthError();
+            const btn = document.getElementById('linkBtn');
+            btn.disabled = true; btn.textContent = '紐付け中...';
+            try {
+                const uid = currentAuthUser.uid;
+                // userMapが空なら最初のユーザー → 自動Admin
+                const isFirstUser = Object.keys(userMap).length === 0;
+                const entry = {
+                    memberId: memberId,
+                    email: currentAuthUser.email,
+                    isAdmin: isFirstUser,
+                    linkedAt: Date.now()
+                };
+                await database.ref('teams/' + TEAM_ID + '/userMap/' + uid).set(entry);
+                userMap[uid] = entry;
+                currentMemberId = memberId;
+                isAdmin = isFirstUser;
+
+                if (isFirstUser) {
+                    console.log('🔑 最初のユーザーとして管理者に設定されました');
+                }
+
+                // アプリ表示
                 document.getElementById('authModal').style.display = 'none';
                 document.getElementById('mainContainer').style.display = 'block';
-                initApp();
-            } else {
-                document.getElementById('authError').style.display = 'block';
-                document.getElementById('authPassword').value = '';
+                updateHeaderUserInfo();
+                await initApp();
+            } catch (err) {
+                console.error('メンバー紐付けエラー:', err);
+                showAuthError('紐付けに失敗しました: ' + err.message);
+                btn.disabled = false; btn.textContent = '紐付けして開始';
             }
+        }
+
+        function getCurrentMemberId() {
+            return currentMemberId;
+        }
+
+        function canEditMember(memberId) {
+            if (!currentMemberId) return false;
+            if (adminEditMode && isAdmin) return true;
+            return memberId === currentMemberId;
+        }
+
+        function toggleAdminEdit() {
+            if (!isAdmin) return;
+            adminEditMode = !adminEditMode;
+            const btn = document.getElementById('headerAdminEditBtn');
+            if (btn) {
+                btn.textContent = '管理者編集: ' + (adminEditMode ? 'ON' : 'OFF');
+                btn.style.background = adminEditMode ? '#dc2626' : '#334155';
+                btn.style.borderColor = adminEditMode ? '#ef4444' : '#475569';
+            }
+            renderAll();
+        }
+
+        function updateHeaderUserInfo() {
+            const container = document.getElementById('headerUserInfo');
+            if (!container) return;
+            const memberName = data.members.find(m => m.id === currentMemberId)?.name || currentAuthUser?.email || '';
+            document.getElementById('headerUserName').textContent = memberName;
+            document.getElementById('headerAdminBadge').style.display = isAdmin ? 'inline' : 'none';
+            document.getElementById('headerAdminEditBtn').style.display = isAdmin ? 'inline-block' : 'none';
+            container.style.display = 'flex';
+        }
+
+        function setupAuthListener() {
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    // ログイン済み
+                    currentAuthUser = user;
+                    showAuthLoading();
+                    loadData();
+                    const hasMapping = await loadUserMap();
+                    if (hasMapping) {
+                        // マッピングあり → アプリ表示
+                        document.getElementById('authModal').style.display = 'none';
+                        document.getElementById('mainContainer').style.display = 'block';
+                        updateHeaderUserInfo();
+                        await initApp();
+                    } else {
+                        // マッピングなし → メンバー紐付け画面
+                        showMemberLinkForm();
+                    }
+                } else {
+                    // 未ログイン → ログイン画面
+                    currentAuthUser = null;
+                    currentMemberId = null;
+                    isAdmin = false;
+                    adminEditMode = false;
+                    document.getElementById('mainContainer').style.display = 'none';
+                    document.getElementById('authModal').style.display = 'flex';
+                    showLoginForm();
+                }
+            });
         }
 
         async function initApp() {
@@ -1582,33 +1898,15 @@
             applySeasonalBackground();
         }
 
-        function checkAuth() {
-            // このチームの認証キーをチェック
-            if (sessionStorage.getItem('salesTracker_auth_personal') === 'true') {
-                document.getElementById('authModal').style.display = 'none';
-                document.getElementById('mainContainer').style.display = 'block';
-                return true;
-            } else {
-                // 認証されていない場合はモーダルを表示
+        function init() {
+            setupAuthListener();
+        }
+
+        // 戻るボタンでページに戻った時は特に何もしない（onAuthStateChangedが管理）
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted && !currentAuthUser) {
                 document.getElementById('authModal').style.display = 'flex';
                 document.getElementById('mainContainer').style.display = 'none';
-                document.getElementById('authPassword').focus();
-                return false;
-            }
-        }
-
-        async function init() {
-            // セッション内で認証済みならスキップ
-            if (checkAuth()) {
-                initApp();
-            }
-        }
-
-        // 戻るボタンでページに戻った時も認証を再チェック
-        window.addEventListener('pageshow', function(event) {
-            if (event.persisted) {
-                // bfcacheから復元された場合、認証を再チェック
-                checkAuth();
             }
         });
 
@@ -1722,7 +2020,7 @@
         function getMemberReview() {
             const w = getWeekData();
             const mid = (selectedMember && selectedMember !== 'all')
-                ? selectedMember : data.settings.currentUserId;
+                ? selectedMember : getCurrentMemberId();
             if (!mid) {
                 return { mainIssue: '', mainCause: '', causeActions: [
                     {cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]}
@@ -1735,7 +2033,7 @@
                     causeActions: [{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]},{cause:'',actions:[]}],
                     topReasonAction: ''
                 };
-                if (mid === data.settings.currentUserId && w.review &&
+                if (mid === getCurrentMemberId() && w.review &&
                     (w.review.mainIssue || w.review.mainCause || w.review.topReasonAction ||
                      (w.review.causeActions && w.review.causeActions.some(ca => ca.cause || (ca.actions && ca.actions.length > 0))))) {
                     w.memberReview[mid].mainIssue = w.review.mainIssue || '';
@@ -1900,6 +2198,7 @@
             // 設定タブが開かれたときにrenderSettingsを再呼び出し
             if (id === 'settings') {
                 renderSettings();
+                loadBackupList();
             }
         }
 
@@ -2796,7 +3095,6 @@
                 return;
             }
 
-            const currentUserId = data.settings.currentUserId;
             const dates = getWeekDates();
             const days = ['土','日','月','火','水','木','金'];
 
@@ -2805,7 +3103,7 @@
 
             const members = selectedMember === 'all' ? data.members : data.members.filter(m => m.id === selectedMember);
             members.forEach(member => {
-                const isMyData = member.id === currentUserId;
+                const isMyData = canEditMember(member.id);
                 const disabledAttr = isMyData ? '' : 'disabled';
                 const rowStyle = isMyData ? '' : 'opacity:0.6;';
                 const lockIcon = isMyData ? '' : ' 🔒';
@@ -2854,7 +3152,6 @@
         }
 
         function renderDailyInputMonth() {
-            const currentUserId = data.settings.currentUserId;
             const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
             const members = selectedMember === 'all' ? data.members : data.members.filter(m => m.id === selectedMember);
 
@@ -2874,7 +3171,7 @@
             html += `<div class="daily-cell header">計</div></div>`;
 
             members.forEach(member => {
-                const isMyData = member.id === currentUserId;
+                const isMyData = canEditMember(member.id);
                 const disabledAttr = isMyData ? '' : 'disabled';
                 const rowStyle = isMyData ? '' : 'opacity:0.6;';
                 const lockIcon = isMyData ? '' : ' 🔒';
@@ -3190,17 +3487,16 @@
             const filteredCases = allCases.map((c, i) => ({...c, _idx: i}))
                 .filter(c => selectedMember === 'all' || !c.memberId || c.memberId === selectedMember);
             document.getElementById('sCasesCount').textContent = `(${filteredCases.length}件)`;
-            const currentUserId = data.settings.currentUserId;
             document.getElementById('caseList').innerHTML = filteredCases.length === 0 ? '<p style="color:#64748b;font-size:13px">残案件なし</p>' :
                 filteredCases.map(c => {
-                    const isEditable = !c.memberId || c.memberId === currentUserId;
+                    const isEditable = !c.memberId || canEditMember(c.memberId);
                     const memberName = c.memberId ? (data.members.find(m => m.id === c.memberId)?.name || '') : '';
                     const memberBadge = selectedMember === 'all' && memberName ? `<span style="font-size:10px;background:#6366f1;padding:2px 6px;border-radius:4px;margin-right:4px">${memberName}</span>` : '';
                     return `<div class="case-item" style="${isEditable ? '' : 'opacity:0.6'}">${memberBadge}<input type="text" value="${c.date||''}" placeholder="日付" onchange="updateCase(${c._idx},'date',this.value)" ${isEditable ? '' : 'disabled'}><input type="text" value="${c.customer||''}" placeholder="顧客名" onchange="updateCase(${c._idx},'customer',this.value)" ${isEditable ? '' : 'disabled'}><input type="text" value="${c.closer||''}" placeholder="クローザー" onchange="updateCase(${c._idx},'closer',this.value)" ${isEditable ? '' : 'disabled'}><button class="btn btn-danger btn-sm" onclick="deleteCase(${c._idx})" ${isEditable ? '' : 'disabled'}>×</button></div>`;
                 }).join('');
         }
         function addCase() {
-            const currentUserId = data.settings.currentUserId;
+            const currentUserId = getCurrentMemberId();
             if (!currentUserId) { alert('ユーザーを設定してください'); return; }
             getWeekData().review.cases.push({ memberId: currentUserId });
             saveData(); renderCases(); syncToCloud();
@@ -3215,10 +3511,9 @@
             const filteredCancels = allCancels.map((c, i) => ({...c, _idx: i}))
                 .filter(c => selectedMember === 'all' || !c.memberId || c.memberId === selectedMember);
             document.getElementById('sCancelsCount').textContent = `(${filteredCancels.length}件)`;
-            const currentUserId = data.settings.currentUserId;
             document.getElementById('cancelList').innerHTML = filteredCancels.length === 0 ? '<p style="color:#64748b;font-size:13px">キャンセルなし</p>' :
                 filteredCancels.map(c => {
-                    const isEditable = !c.memberId || c.memberId === currentUserId;
+                    const isEditable = !c.memberId || canEditMember(c.memberId);
                     const memberName = c.memberId ? (data.members.find(m => m.id === c.memberId)?.name || '') : '';
                     const memberBadge = selectedMember === 'all' && memberName ? `<span style="font-size:10px;background:#6366f1;padding:2px 6px;border-radius:4px;margin-right:4px">${memberName}</span>` : '';
                     return `
@@ -3235,7 +3530,7 @@
                 `}).join('');
         }
         function addCancel() {
-            const currentUserId = data.settings.currentUserId;
+            const currentUserId = getCurrentMemberId();
             if (!currentUserId) { alert('ユーザーを設定してください'); return; }
             getWeekData().review.cancels.push({ memberId: currentUserId });
             saveData(); renderCancels(); syncToCloud();
@@ -3252,10 +3547,9 @@
             const filteredList = allList.map((item, i) => ({...item, _idx: i}))
                 .filter(item => selectedMember === 'all' || !item.memberId || item.memberId === selectedMember);
             document.getElementById('sDoinMuchakuLabel').textContent = `(${filteredList.length}件)`;
-            const currentUserId = data.settings.currentUserId;
             document.getElementById('doinMuchakuList').innerHTML = filteredList.length === 0 ? '<p style="color:#64748b;font-size:13px">動員後無着地なし</p>' :
                 filteredList.map(item => {
-                    const isEditable = !item.memberId || item.memberId === currentUserId;
+                    const isEditable = !item.memberId || canEditMember(item.memberId);
                     const memberName = item.memberId ? (data.members.find(m => m.id === item.memberId)?.name || '') : '';
                     const memberBadge = selectedMember === 'all' && memberName ? `<span style="font-size:10px;background:#6366f1;padding:2px 6px;border-radius:4px;margin-right:4px">${memberName}</span>` : '';
                     return `
@@ -3272,7 +3566,7 @@
                 `}).join('');
         }
         function addDoinMuchaku() {
-            const currentUserId = data.settings.currentUserId;
+            const currentUserId = getCurrentMemberId();
             if (!currentUserId) { alert('ユーザーを設定してください'); return; }
             const r = getWeekData().review;
             if (!r.doinMuchakuList) r.doinMuchakuList = [];
@@ -3731,7 +4025,6 @@
         function renderNippo() {
             renderWeekTabs();
 
-            const currentUserId = data.settings.currentUserId;
             const dates = getWeekDates();
             const days = ['土','日','月','火','水','木','金'];
             const monthVideos = getMonthVideos();
@@ -3751,7 +4044,7 @@
 
                     membersToShow.forEach(member => {
                         const nippoData = getNippoData(member.id, dayIndex);
-                        const isMyData = member.id === currentUserId;
+                        const isMyData = canEditMember(member.id);
                         const disabledAttr = isMyData ? '' : 'disabled';
                         const cardStyle = isMyData ? '' : 'opacity:0.7;';
                         const lockIcon = isMyData ? '' : ' 🔒';
@@ -4040,6 +4333,8 @@
             const file = event.target.files[0];
             if (!file) return;
 
+            createBackup('日報CSVインポート前');
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
@@ -4220,6 +4515,8 @@
             const file = event.target.files[0];
             if (!file) return;
 
+            createBackup('月間CSVインポート前');
+
             // ファイル名からメンバー名を抽出（例: "1月吉田（全日）"）
             let memberNameFromFile = '';
             const fileMatch = file.name.match(/\d+月([^（(]+)/);
@@ -4348,6 +4645,8 @@
             const file = event.target.files[0];
             if (!file) return;
 
+            createBackup('日別CSVインポート前');
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
@@ -4372,6 +4671,7 @@
                     });
 
                     let importCount = 0;
+                    let skippedZeroCount = 0;
                     let newMemberCount = 0;
                     let skippedLabels = new Set();
                     const addedMembers = new Set();
@@ -4402,6 +4702,13 @@
                             continue;
                         }
 
+                        // 全て0の行はスキップ（データ上書き防止）
+                        const allZero = Array.from({length: 7}, (_, idx) => parseInt(row[3 + idx]) || 0).every(v => v === 0);
+                        if (allZero) {
+                            skippedZeroCount++;
+                            continue;
+                        }
+
                         // 日別データを更新
                         const d = getMemberDaily(member.id);
                         for (let day = 0; day < 7; day++) {
@@ -4415,6 +4722,9 @@
                     syncToCloud();
                     renderAll();
                     let msg = `${importCount}件のデータをインポートしました`;
+                    if (skippedZeroCount > 0) {
+                        msg += `\n（全0の${skippedZeroCount}行をスキップ）`;
+                    }
                     if (newMemberCount > 0) {
                         msg += `\n新規メンバー ${newMemberCount}名を追加: ${Array.from(addedMembers).join(', ')}`;
                     }
@@ -4594,21 +4904,24 @@
             console.log('=== renderSettings開始 ===');
             console.log('メンバー数:', data.members.length);
 
-            // 現在のユーザー選択ドロップダウンを最初に更新（他のエラーに影響されないように）
+            // ログイン情報表示を更新
             try {
-                const currentUserSelect = document.getElementById('currentUserSelect');
-                if (currentUserSelect) {
-                    const optionsHtml = '<option value="">-- 選択してください --</option>' +
-                        data.members.map(m => `<option value="${m.id}" ${data.settings.currentUserId === m.id ? 'selected' : ''}>${m.name}</option>`).join('');
-                    currentUserSelect.innerHTML = optionsHtml;
-                    console.log('✅ ユーザー選択ドロップダウン更新完了, オプション数:', currentUserSelect.options.length);
-                }
-                const warning = document.getElementById('currentUserWarning');
-                if (warning) {
-                    warning.style.display = data.settings.currentUserId ? 'none' : 'block';
+                const memberName = data.members.find(m => m.id === getCurrentMemberId())?.name || '';
+                const nameEl = document.getElementById('settingsUserName');
+                const emailEl = document.getElementById('settingsUserEmail');
+                const roleEl = document.getElementById('settingsUserRole');
+                if (nameEl) nameEl.textContent = memberName || '(未紐付け)';
+                if (emailEl) emailEl.textContent = currentAuthUser?.email || '';
+                if (roleEl) roleEl.textContent = isAdmin ? '管理者' : '一般メンバー';
+
+                // 管理者メニュー表示
+                const adminMenu = document.getElementById('adminMenu');
+                if (adminMenu) {
+                    adminMenu.style.display = isAdmin ? 'block' : 'none';
+                    if (isAdmin) renderUserMapAdmin();
                 }
             } catch (e) {
-                console.error('❌ ユーザー選択更新エラー:', e);
+                console.error('❌ ログイン情報表示エラー:', e);
             }
 
             // メンバーリスト
@@ -4623,8 +4936,7 @@
             // ヒントテキストを更新
             try {
                 const hintEl = document.getElementById('settingsHint');
-                const currentUserId = data.settings.currentUserId;
-                const isMySettings = selectedMember === currentUserId;
+                const canEdit = canEditMember(selectedMember);
 
                 if (selectedMember === 'all') {
                     if (hintEl) {
@@ -4632,7 +4944,7 @@
                     }
                     displayTeamTotals();
                     disableInputs(true);
-                } else if (!isMySettings) {
+                } else if (!canEdit) {
                     const memberName = data.members.find(m => m.id === selectedMember)?.name || '';
                     if (hintEl) {
                         hintEl.innerHTML = `※ <strong style="color:#ef4444">🔒 「${memberName}」さんの設定は閲覧のみ</strong> - 他のメンバーの設定は編集できません。`;
@@ -5021,24 +5333,23 @@
         }
 
         function saveCurrentUser() {
-            const selectedUserId = document.getElementById('currentUserSelect').value;
-            data.settings.currentUserId = selectedUserId || null;
-            saveData();
+            // 認証ベースでIDが決まるため、何もしない
+        }
 
-            // 上部のメンバー表示切り替えも自動的に切り替え
-            if (selectedUserId) {
-                selectedMember = selectedUserId;
-                document.getElementById('memberSelect').value = selectedUserId;
-                const memberName = data.members.find(m => m.id === selectedUserId)?.name || '';
-                console.log('現在のユーザーを設定:', selectedUserId, '表示も切り替え');
-
-                // 全画面を再レンダリング
-                renderAll();
-
-                alert(`✅ 設定完了\n\n現在のユーザー: ${memberName}\n\n表示が${memberName}さんに切り替わりました。\n同期時に${memberName}さんのデータのみ更新されます。`);
-            } else {
-                renderSettings(); // 警告表示を更新
+        function renderUserMapAdmin() {
+            if (!isAdmin) return;
+            const listEl = document.getElementById('userMapList');
+            if (!listEl) return;
+            let html = '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+            html += '<tr style="color:#94a3b8"><th style="text-align:left;padding:4px">メール</th><th style="text-align:left;padding:4px">メンバー</th><th style="text-align:left;padding:4px">権限</th></tr>';
+            for (const uid in userMap) {
+                const entry = userMap[uid];
+                const memberName = data.members.find(m => m.id === entry.memberId)?.name || entry.memberId;
+                const roleBadge = entry.isAdmin ? '<span style="color:#f59e0b;font-weight:600">管理者</span>' : '一般';
+                html += `<tr><td style="padding:4px;color:#e2e8f0">${entry.email}</td><td style="padding:4px;color:#e2e8f0">${memberName}</td><td style="padding:4px">${roleBadge}</td></tr>`;
             }
+            html += '</table>';
+            listEl.innerHTML = html;
         }
 
         function addMember() {
@@ -5086,28 +5397,178 @@
         // データ
         let firebaseInitialized = false;
 
+        let lastBackupDate = null;
+
+        async function createBackup(reason) {
+            if (!firebaseInitialized) return;
+            try {
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const backupRef = database.ref('backups/' + TEAM_ID + '/' + timestamp);
+                const backupData = {
+                    reason: reason,
+                    createdAt: Date.now(),
+                    data: JSON.parse(JSON.stringify(data))
+                };
+                await backupRef.set(backupData);
+                await cleanupOldBackups();
+                console.log('📦 バックアップ作成:', reason);
+            } catch (err) {
+                console.error('バックアップ作成エラー:', err);
+            }
+        }
+
+        async function cleanupOldBackups() {
+            const ref = database.ref('backups/' + TEAM_ID);
+            const snapshot = await ref.orderByChild('createdAt').once('value');
+            const backups = [];
+            snapshot.forEach(child => backups.push({ key: child.key, createdAt: child.val().createdAt }));
+            if (backups.length > 20) {
+                backups.sort((a, b) => a.createdAt - b.createdAt);
+                const toDelete = backups.slice(0, backups.length - 20);
+                for (const b of toDelete) {
+                    await ref.child(b.key).remove();
+                }
+            }
+        }
+
+        async function loadBackupList() {
+            if (!firebaseInitialized) return;
+            const listEl = document.getElementById('backupList');
+            if (!listEl) return;
+            try {
+                const ref = database.ref('backups/' + TEAM_ID);
+                const snapshot = await ref.orderByChild('createdAt').once('value');
+                const backups = [];
+                snapshot.forEach(child => {
+                    const val = child.val();
+                    backups.push({ key: child.key, reason: val.reason, createdAt: val.createdAt });
+                });
+                backups.sort((a, b) => b.createdAt - a.createdAt);
+
+                if (backups.length === 0) {
+                    listEl.innerHTML = '<p style="color:#64748b;font-size:13px">バックアップはまだありません</p>';
+                    return;
+                }
+
+                listEl.innerHTML = backups.map(b => {
+                    const d = new Date(b.createdAt);
+                    const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0f172a;border-radius:6px;margin-bottom:4px">
+                        <div>
+                            <span style="color:#e2e8f0;font-size:13px">${dateStr}</span>
+                            <span style="color:#64748b;font-size:12px;margin-left:8px">${b.reason || ''}</span>
+                        </div>
+                        <button class="btn" style="background:#3b82f6;font-size:11px;padding:4px 10px" onclick="restoreBackup('${b.key}')">復元</button>
+                    </div>`;
+                }).join('');
+            } catch (err) {
+                console.error('バックアップ一覧取得エラー:', err);
+                listEl.innerHTML = '<p style="color:#ef4444;font-size:13px">一覧の取得に失敗しました</p>';
+            }
+        }
+
+        async function restoreBackup(key) {
+            if (!confirm('このバックアップに復元しますか？\n現在のデータは上書きされます。')) return;
+            try {
+                await createBackup('復元前の自動バックアップ');
+                const snapshot = await database.ref('backups/' + TEAM_ID + '/' + key).once('value');
+                const backup = snapshot.val();
+                if (!backup || !backup.data) {
+                    alert('バックアップデータが見つかりません');
+                    return;
+                }
+                data = backup.data;
+                saveData();
+                renderAll();
+                alert('復元完了');
+            } catch (err) {
+                console.error('復元エラー:', err);
+                alert('復元に失敗しました: ' + err.message);
+            }
+        }
+
+        async function createManualBackup() {
+            await createBackup('手動バックアップ');
+            alert('バックアップを作成しました');
+            loadBackupList();
+        }
+
         function saveData() {
             localStorage.setItem('salesPro_core', JSON.stringify(data));
             saveToFirebase();
         }
 
+        let isSaving = false; // 保存中フラグ（リスナーとの競合防止）
+
         function saveToFirebase() {
             if (!firebaseInitialized) return;
+            // 日次自動バックアップ（1日1回）
+            const today = new Date().toDateString();
+            if (lastBackupDate !== today) {
+                lastBackupDate = today;
+                createBackup('日次自動バックアップ');
+            }
             // 保存中表示
             const text = document.getElementById('syncText');
             const dot = document.getElementById('syncDot');
             if (text) text.textContent = '💾 保存中...';
             if (dot) dot.className = 'sync-dot syncing';
 
-            const saveData = JSON.parse(JSON.stringify(data));
-            database.ref('teams/' + TEAM_ID).set(saveData)
+            const myId = getCurrentMemberId();
+            const basePath = 'teams/' + TEAM_ID;
+            const updates = {};
+            const cloned = JSON.parse(JSON.stringify(data));
+
+            // 自分のメンバーの週次データのみ書き込み
+            if (myId && cloned.weeks) {
+                for (const weekKey in cloned.weeks) {
+                    const week = cloned.weeks[weekKey];
+                    // daily: 自分のデータだけ
+                    if (week.daily && week.daily[myId]) {
+                        updates[basePath + '/weeks/' + weekKey + '/daily/' + myId] = week.daily[myId];
+                    }
+                    // nippo: myId_ で始まるキーのみ
+                    if (week.nippo) {
+                        for (const nippoKey in week.nippo) {
+                            if (nippoKey.startsWith(myId + '_')) {
+                                updates[basePath + '/weeks/' + weekKey + '/nippo/' + nippoKey] = week.nippo[nippoKey];
+                            }
+                        }
+                    }
+                    // memberReview: 自分のだけ
+                    if (week.memberReview && week.memberReview[myId]) {
+                        updates[basePath + '/weeks/' + weekKey + '/memberReview/' + myId] = week.memberReview[myId];
+                    }
+                    // review（cases/cancels/doinMuchakuList等）→ 共有データとして全員書き込み可
+                    if (week.review) {
+                        updates[basePath + '/weeks/' + weekKey + '/review'] = week.review;
+                    }
+                    // instagram → 共有（アカウント単位）
+                    if (week.instagram) {
+                        updates[basePath + '/weeks/' + weekKey + '/instagram'] = week.instagram;
+                    }
+                }
+            }
+
+            // 共有データ
+            updates[basePath + '/members'] = cloned.members;
+            updates[basePath + '/accounts'] = cloned.accounts || [];
+            updates[basePath + '/settings'] = cloned.settings;
+            updates[basePath + '/monthVideos'] = cloned.monthVideos || {};
+            if (cloned.lastUpdated) updates[basePath + '/lastUpdated'] = cloned.lastUpdated;
+            if (cloned.deletedMembers) updates[basePath + '/deletedMembers'] = cloned.deletedMembers;
+
+            isSaving = true;
+            database.ref().update(updates)
                 .then(() => {
-                    console.log('🔥 Firebase保存完了');
+                    isSaving = false;
+                    console.log('🔥 Firebase差分保存完了');
                     if (text) text.textContent = '✓ 保存完了';
                     if (dot) dot.className = 'sync-dot';
                     setTimeout(() => { updateSyncStatus(); }, 2000);
                 })
                 .catch(err => {
+                    isSaving = false;
                     console.error('Firebase保存エラー:', err);
                     if (text) text.textContent = '❌ 保存エラー';
                     if (dot) dot.className = 'sync-dot offline';
@@ -5122,7 +5583,6 @@
                 if (!data.settings.budget) {
                     data.settings.budget = data.settings.weekly || { post: 56, apoGet: 50, apoExec: 46, doinGet: 7, doinExec: 4, mendan: 2, seiyaku: 1 };
                 }
-                if (!data.settings.currentUserId) data.settings.currentUserId = null;
                 if (!data.lastUpdated) data.lastUpdated = null;
                 if (!data.deletedMembers) data.deletedMembers = [];
                 // membersが配列であることを確認
@@ -5146,26 +5606,78 @@
         function setupFirebaseListener() {
             database.ref('teams/' + TEAM_ID).on('value', (snapshot) => {
                 const firebaseData = snapshot.val();
-                if (firebaseData) {
-                    data = { ...data, ...firebaseData };
+                if (!firebaseData) return;
 
-                    // membersが配列であることを確認（Firebaseがオブジェクトに変換する場合がある）
-                    if (data.members && !Array.isArray(data.members)) {
+                // 保存中は自分のデータの上書きをスキップ（エコーバック防止）
+                const myId = getCurrentMemberId();
+
+                // 共有データはFirebaseから取得
+                if (firebaseData.members) {
+                    data.members = firebaseData.members;
+                    if (!Array.isArray(data.members)) {
                         data.members = Object.values(data.members);
-                        console.log('⚠️ membersをオブジェクトから配列に変換しました');
                     }
-                    if (!data.members) {
-                        data.members = [];
-                    }
-
-                    // Firebaseの設定を優先（他のメンバーが入力したデータを正しく反映）
-                    if (firebaseData.settings) {
-                        data.settings = firebaseData.settings;
-                    }
-                    localStorage.setItem('salesPro_personal', JSON.stringify(data));
-                    renderAll();
-                    console.log('🔥 Firebaseからリアルタイム更新, メンバー数:', data.members.length);
                 }
+                if (!data.members) data.members = [];
+
+                if (firebaseData.accounts) data.accounts = firebaseData.accounts;
+                if (!Array.isArray(data.accounts)) data.accounts = data.accounts ? Object.values(data.accounts) : [];
+
+                if (firebaseData.settings) data.settings = firebaseData.settings;
+                if (firebaseData.monthVideos) data.monthVideos = firebaseData.monthVideos;
+                if (firebaseData.deletedMembers) data.deletedMembers = firebaseData.deletedMembers;
+                if (firebaseData.lastUpdated) data.lastUpdated = firebaseData.lastUpdated;
+
+                // 週次データ: 他ユーザーのデータはFirebaseから、自分のデータはローカル保持（保存中の場合）
+                if (firebaseData.weeks) {
+                    if (!data.weeks) data.weeks = {};
+                    for (const weekKey in firebaseData.weeks) {
+                        if (!data.weeks[weekKey]) data.weeks[weekKey] = {};
+                        const fbWeek = firebaseData.weeks[weekKey];
+                        const localWeek = data.weeks[weekKey];
+
+                        // daily
+                        if (fbWeek.daily) {
+                            if (!localWeek.daily) localWeek.daily = {};
+                            for (const memberId in fbWeek.daily) {
+                                if (memberId === myId && isSaving) continue; // 保存中は自分を上書きしない
+                                localWeek.daily[memberId] = fbWeek.daily[memberId];
+                            }
+                        }
+
+                        // nippo
+                        if (fbWeek.nippo) {
+                            if (!localWeek.nippo) localWeek.nippo = {};
+                            for (const nippoKey in fbWeek.nippo) {
+                                if (myId && nippoKey.startsWith(myId + '_') && isSaving) continue;
+                                localWeek.nippo[nippoKey] = fbWeek.nippo[nippoKey];
+                            }
+                        }
+
+                        // memberReview
+                        if (fbWeek.memberReview) {
+                            if (!localWeek.memberReview) localWeek.memberReview = {};
+                            for (const memberId in fbWeek.memberReview) {
+                                if (memberId === myId && isSaving) continue;
+                                localWeek.memberReview[memberId] = fbWeek.memberReview[memberId];
+                            }
+                        }
+
+                        // review（共有データ）
+                        if (fbWeek.review) localWeek.review = fbWeek.review;
+
+                        // instagram（共有データ）
+                        if (fbWeek.instagram) localWeek.instagram = fbWeek.instagram;
+                    }
+                }
+
+                // userMapの更新もキャッチ
+                if (firebaseData.userMap) userMap = firebaseData.userMap;
+
+                localStorage.setItem('salesPro_core', JSON.stringify(data));
+                updateHeaderUserInfo();
+                renderAll();
+                console.log('🔥 Firebaseからスマートマージ更新, メンバー数:', data.members.length);
             });
             firebaseInitialized = true;
             updateSyncStatus();
@@ -5196,6 +5708,7 @@
         function importData(e) {
             const f = e.target.files[0];
             if (!f) return;
+            createBackup('JSONインポート前');
             const r = new FileReader();
             r.onload = ev => { try { data = JSON.parse(ev.target.result); saveData(); renderAll(); alert('インポート完了'); } catch { alert('読み込み失敗'); } };
             r.readAsText(f);
