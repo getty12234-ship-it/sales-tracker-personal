@@ -879,10 +879,14 @@
         <header>
             <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
                 <h1>パーソナル施策ツール</h1>
-                <span style="font-size:10px;color:#64748b;margin-left:-12px">v2.1</span>
+                <span style="font-size:10px;color:#64748b;margin-left:-12px">v2.2</span>
                 <div class="sync-status">
                     <div class="sync-dot" id="syncDot"></div>
                     <span id="syncText">ローカル保存</span>
+                </div>
+                <div id="debugPanel" style="font-size:10px;color:#94a3b8;background:#1e293b;padding:4px 8px;border-radius:4px;display:none">
+                    <span id="debugLastSync">同期: --</span> | <span id="debugListenerCount">受信: 0回</span> | <span id="debugSaveCount">送信: 0回</span>
+                    <button onclick="forceReload()" style="font-size:10px;margin-left:8px;padding:2px 6px;background:#334155;color:#e2e8f0;border:none;border-radius:3px;cursor:pointer">強制再読込</button>
                 </div>
                 <div id="headerUserInfo" style="display:none;align-items:center;gap:8px;margin-left:auto;font-size:13px">
                     <span id="headerUserName" style="color:#e2e8f0"></span>
@@ -5579,6 +5583,9 @@
             saveToFirebase();
         }
 
+        let debugSaveCount = 0;
+        let debugListenerCount = 0;
+
         function saveToFirebase() {
             if (!firebaseInitialized) return;
             // 日次自動バックアップ（1日1回）
@@ -5593,51 +5600,14 @@
             if (text) text.textContent = '💾 保存中...';
             if (dot) dot.className = 'sync-dot syncing';
 
-            const myId = getCurrentMemberId();
-            const base = 'teams/' + TEAM_ID;
-            const updates = {};
-
-            // === 自分の個人データだけを書き込む（他ユーザーのパスには触れない） ===
-            for (const weekKey in data.weeks) {
-                const w = data.weeks[weekKey];
-                // 自分のdailyデータ
-                if (w.daily && w.daily[myId]) {
-                    updates[base + '/weeks/' + weekKey + '/daily/' + myId] = w.daily[myId];
-                }
-                // 自分のnippoエントリ
-                if (w.nippo) {
-                    for (const key in w.nippo) {
-                        if (key.startsWith(myId + '_')) {
-                            updates[base + '/weeks/' + weekKey + '/nippo/' + key] = w.nippo[key];
-                        }
-                    }
-                }
-                // 自分のmemberReview
-                if (w.memberReview && w.memberReview[myId]) {
-                    updates[base + '/weeks/' + weekKey + '/memberReview/' + myId] = w.memberReview[myId];
-                }
-                // 共有データ（review: cases/cancels/doinMuchaku/ngReasons）
-                if (w.review) {
-                    updates[base + '/weeks/' + weekKey + '/review'] = w.review;
-                }
-                // Instagram（共有）
-                if (w.instagram) {
-                    updates[base + '/weeks/' + weekKey + '/instagram'] = w.instagram;
-                }
-            }
-
-            // === 共有データ ===
-            updates[base + '/members'] = data.members;
-            updates[base + '/accounts'] = data.accounts || [];
-            updates[base + '/settings'] = data.settings;
-            updates[base + '/monthVideos'] = data.monthVideos || {};
-            updates[base + '/lastUpdated'] = new Date().toISOString();
-            updates[base + '/deletedMembers'] = data.deletedMembers || [];
-
-            console.log('🔥 Firebase .update() パス数:', Object.keys(updates).length);
-            database.ref().update(updates)
+            // シンプルに全データを .set() で保存（確実に同期させるため）
+            const saveData = JSON.parse(JSON.stringify(data));
+            database.ref('teams/' + TEAM_ID).set(saveData)
                 .then(() => {
-                    console.log('🔥 Firebase保存完了');
+                    debugSaveCount++;
+                    const el = document.getElementById('debugSaveCount');
+                    if (el) el.textContent = '送信: ' + debugSaveCount + '回';
+                    console.log('🔥 Firebase保存完了 v2.2, 送信#' + debugSaveCount);
                     if (text) text.textContent = '✓ 保存完了';
                     if (dot) dot.className = 'sync-dot';
                     setTimeout(() => { updateSyncStatus(); }, 2000);
@@ -5646,6 +5616,7 @@
                     console.error('Firebase保存エラー:', err);
                     if (text) text.textContent = '❌ 保存エラー';
                     if (dot) dot.className = 'sync-dot offline';
+                    alert('保存エラー: ' + err.message);
                 });
         }
 
@@ -5682,9 +5653,19 @@
                 const firebaseData = snapshot.val();
                 if (!firebaseData) return;
 
+                debugListenerCount++;
+                const now = new Date();
+                const timeStr = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+
+                // 診断表示更新
+                const dp = document.getElementById('debugPanel');
+                if (dp) dp.style.display = 'block';
+                const el1 = document.getElementById('debugLastSync');
+                if (el1) el1.textContent = '同期: ' + timeStr;
+                const el2 = document.getElementById('debugListenerCount');
+                if (el2) el2.textContent = '受信: ' + debugListenerCount + '回';
+
                 // シンプルにFirebaseデータで上書き
-                // .update()で保存しているため、他ユーザーのデータはFirebase側で保持されている
-                // → バックアップ/リストア不要
                 data = { ...data, ...firebaseData };
 
                 // membersが配列であることを確認（Firebaseはオブジェクトに変換する場合がある）
@@ -5702,11 +5683,33 @@
                 localStorage.setItem('salesPro_personal', JSON.stringify(data));
                 updateHeaderUserInfo();
                 renderAll();
-                console.log('🔥 Firebase同期完了 v2.1, メンバー数:', data.members.length);
+                console.log('🔥 Firebase同期完了 v2.2 受信#' + debugListenerCount + ', メンバー数:', data.members.length);
             });
             firebaseInitialized = true;
             updateSyncStatus();
-            console.log('🔥 Firebaseリスナー設定完了 v2.1');
+            console.log('🔥 Firebaseリスナー設定完了 v2.2');
+        }
+
+        // 強制再読込: Firebaseから最新データを取得
+        async function forceReload() {
+            try {
+                const snapshot = await database.ref('teams/' + TEAM_ID).once('value');
+                const firebaseData = snapshot.val();
+                if (firebaseData) {
+                    data = { ...data, ...firebaseData };
+                    if (data.members && !Array.isArray(data.members)) data.members = Object.values(data.members);
+                    if (!data.members) data.members = [];
+                    if (data.accounts && !Array.isArray(data.accounts)) data.accounts = Object.values(data.accounts);
+                    if (firebaseData.userMap) userMap = firebaseData.userMap;
+                    localStorage.setItem('salesPro_personal', JSON.stringify(data));
+                    renderAll();
+                    alert('再読込完了！メンバー数: ' + data.members.length);
+                } else {
+                    alert('Firebaseにデータがありません');
+                }
+            } catch (err) {
+                alert('再読込エラー: ' + err.message);
+            }
         }
 
         function saveAll() { saveReview(); saveData(); }
