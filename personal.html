@@ -836,14 +836,28 @@
 
             <!-- メンバー紐付けフォーム -->
             <div id="memberLinkForm" style="display:none">
-                <p style="color:#e2e8f0;font-size:15px;margin-bottom:16px">あなたのメンバーを選択してください</p>
-                <select id="memberLinkSelect"
-                        style="width:100%;padding:12px 16px;font-size:15px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:16px">
-                    <option value="">-- メンバーを選択 --</option>
-                </select>
+                <p style="color:#e2e8f0;font-size:15px;margin-bottom:16px">あなたのメンバーを設定してください</p>
+                <!-- 既存メンバーから選択 -->
+                <div id="linkExistingSection">
+                    <p style="color:#94a3b8;font-size:13px;margin-bottom:8px">既存メンバーから選択:</p>
+                    <select id="memberLinkSelect"
+                            style="width:100%;padding:12px 16px;font-size:15px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:12px">
+                        <option value="">-- メンバーを選択 --</option>
+                    </select>
+                </div>
+                <!-- 区切り -->
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                    <div style="flex:1;height:1px;background:#334155"></div>
+                    <span style="color:#64748b;font-size:13px">または</span>
+                    <div style="flex:1;height:1px;background:#334155"></div>
+                </div>
+                <!-- 新しい名前で登録 -->
+                <p style="color:#94a3b8;font-size:13px;margin-bottom:8px">新しい名前で参加:</p>
+                <input type="text" id="newMemberNameInput" placeholder="あなたの名前を入力"
+                       style="width:100%;padding:12px 16px;font-size:15px;background:#0f172a;border:2px solid #334155;color:#e2e8f0;border-radius:8px;margin-bottom:16px">
                 <button onclick="linkMember()" id="linkBtn"
                         style="width:100%;padding:12px;font-size:16px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600">
-                    紐付けして開始
+                    開始
                 </button>
             </div>
 
@@ -1796,13 +1810,30 @@
         }
 
         async function linkMember() {
-            const memberId = document.getElementById('memberLinkSelect').value;
-            if (!memberId) { showAuthError('メンバーを選択してください'); return; }
+            let memberId = document.getElementById('memberLinkSelect').value;
+            const newName = document.getElementById('newMemberNameInput').value.trim();
+
+            // どちらも未入力ならエラー
+            if (!memberId && !newName) { showAuthError('メンバーを選択するか、名前を入力してください'); return; }
+            // 両方入力されている場合は新規名前を優先
+            if (newName) memberId = null;
+
             hideAuthError();
             const btn = document.getElementById('linkBtn');
-            btn.disabled = true; btn.textContent = '紐付け中...';
+            btn.disabled = true; btn.textContent = '設定中...';
             try {
                 const uid = currentAuthUser.uid;
+
+                // 新しい名前が入力された場合、メンバーを自動追加
+                if (newName) {
+                    memberId = 'mem_' + Date.now();
+                    const newMember = { id: memberId, name: newName };
+                    data.members.push(newMember);
+                    // Firebaseにメンバーリストを保存
+                    await database.ref('teams/' + TEAM_ID + '/members').set(data.members);
+                    console.log('新メンバー自動追加:', newName, memberId);
+                }
+
                 // userMapが空なら最初のユーザー → 自動Admin
                 const isFirstUser = Object.keys(userMap).length === 0;
                 const entry = {
@@ -1828,7 +1859,7 @@
             } catch (err) {
                 console.error('メンバー紐付けエラー:', err);
                 showAuthError('紐付けに失敗しました: ' + err.message);
-                btn.disabled = false; btn.textContent = '紐付けして開始';
+                btn.disabled = false; btn.textContent = '開始';
             }
         }
 
