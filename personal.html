@@ -5543,7 +5543,7 @@
         }
 
         function saveData() {
-            localStorage.setItem('salesPro_core', JSON.stringify(data));
+            localStorage.setItem('salesPro_personal', JSON.stringify(data));
             saveToFirebase();
         }
 
@@ -5625,7 +5625,7 @@
         }
 
         function loadData() {
-            const s = localStorage.getItem('salesPro_core');
+            const s = localStorage.getItem('salesPro_personal');
             if (s) {
                 data = JSON.parse(s);
                 if (!data.monthVideos) data.monthVideos = {};
@@ -5723,7 +5723,7 @@
                 // userMapの更新もキャッチ
                 if (firebaseData.userMap) userMap = firebaseData.userMap;
 
-                localStorage.setItem('salesPro_core', JSON.stringify(data));
+                localStorage.setItem('salesPro_personal', JSON.stringify(data));
                 updateHeaderUserInfo();
                 renderAll();
                 console.log('🔥 Firebaseからスマートマージ更新, メンバー数:', data.members.length);
@@ -5834,7 +5834,7 @@
             a.click();
         }
 
-        function clearData() { if (!confirm('全データを削除しますか？')) return; localStorage.removeItem('salesPro_core'); location.reload(); }
+        function clearData() { if (!confirm('全データを削除しますか？')) return; localStorage.removeItem('salesPro_personal'); location.reload(); }
 
         function resetLocalOnly() {
             const msg = `【ローカルデータのリセット】
@@ -5848,7 +5848,7 @@
             if (!confirm(msg)) return;
 
             // ローカルストレージをクリア
-            localStorage.removeItem('salesPro_core');
+            localStorage.removeItem('salesPro_personal');
 
             alert('ローカルデータをリセットしました。\n\nページをリロードします。');
             location.reload();
