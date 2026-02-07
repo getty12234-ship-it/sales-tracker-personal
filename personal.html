@@ -5580,23 +5580,27 @@
                 return currentData;
             })
                 .then((result) => {
-                    isSaving = false;
-                    // トランザクション成功後、Firebase上のマージ済みデータをローカルに反映
+                    // トランザクション成功後、Firebaseのマージ済み最終状態でローカルを置換
                     if (result.committed && result.snapshot) {
                         const merged = result.snapshot.val();
                         if (merged) {
-                            deepMerge(data, merged);
+                            // マージ済みデータで直接上書き（deepMergeしない→二重適用防止）
+                            const localOnlyKeys = ['deletedMembers'];
+                            Object.keys(merged).forEach(k => { data[k] = merged[k]; });
+                            // 配列修復
                             if (data.members && !Array.isArray(data.members))
                                 data.members = Object.values(data.members);
+                            if (!data.members) data.members = [];
                             if (data.accounts && !Array.isArray(data.accounts))
                                 data.accounts = Object.values(data.accounts);
                             localStorage.setItem('salesPro_personal', JSON.stringify(data));
                         }
                     }
+                    isSaving = false;
                     debugSaveCount++;
                     const el = document.getElementById('debugSaveCount');
                     if (el) el.textContent = '送信: ' + debugSaveCount + '回';
-                    console.log('🔥 Firebase保存完了 v3.1 (transaction), 送信#' + debugSaveCount);
+                    console.log('🔥 Firebase保存完了 v3.2 (transaction+smartMerge), 送信#' + debugSaveCount);
                     if (text) text.textContent = '✓ 保存完了';
                     if (dot) dot.className = 'sync-dot';
                     setTimeout(() => { updateSyncStatus(); }, 2000);
@@ -5640,11 +5644,39 @@
 
         function deepMerge(target, source) {
             for (const key of Object.keys(source)) {
-                if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])
-                    && target[key] && typeof target[key] === 'object' && !Array.isArray(target[key])) {
-                    deepMerge(target[key], source[key]);
+                const s = source[key];
+                const t = target[key];
+
+                if (s && typeof s === 'object' && !Array.isArray(s)
+                    && t && typeof t === 'object' && !Array.isArray(t)) {
+                    // オブジェクト同士: 再帰マージ
+                    deepMerge(t, s);
+                } else if (Array.isArray(s) && Array.isArray(t)
+                    && s.length === t.length && s.length > 0
+                    && typeof s[0] === 'number') {
+                    // 同じ長さの数値配列（日別データ [0,0,0,0,0,0,0]）: 要素単位マージ
+                    // sourceに非ゼロ値があればそちらを採用、なければtargetを維持
+                    for (let i = 0; i < s.length; i++) {
+                        if (s[i] !== 0) {
+                            t[i] = s[i];
+                        }
+                    }
+                } else if ((key === 'members' || key === 'accounts')
+                    && Array.isArray(s) && Array.isArray(t)) {
+                    // members/accounts配列: ID基準でマージ（追加・更新を両立）
+                    const merged = [...t];
+                    s.forEach(sItem => {
+                        if (!sItem || !sItem.id) return;
+                        const idx = merged.findIndex(m => m && m.id === sItem.id);
+                        if (idx >= 0) {
+                            merged[idx] = sItem; // 既存: 更新
+                        } else {
+                            merged.push(sItem);  // 新規: 追加
+                        }
+                    });
+                    target[key] = merged;
                 } else {
-                    target[key] = source[key];
+                    target[key] = s;
                 }
             }
         }
@@ -5726,11 +5758,11 @@
                     }
                 }
 
-                console.log('🔥 Firebase同期完了 v3.1 (transaction+preserve) 受信#' + debugListenerCount + ', メンバー数:', data.members.length);
+                console.log('🔥 Firebase同期完了 v3.2 (smartMerge+preserve) 受信#' + debugListenerCount + ', メンバー数:', data.members.length);
             });
             firebaseInitialized = true;
             updateSyncStatus();
-            console.log('🔥 Firebaseリスナー設定完了 v3.1');
+            console.log('🔥 Firebaseリスナー設定完了 v3.2');
         }
 
         // 強制再読込: Firebaseから最新データを取得
