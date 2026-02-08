@@ -2443,69 +2443,105 @@
                 }
             };
 
-            // 残り日当たり必要数を計算する関数
-            const getDailyNeeded = (monthlyGoal, actual) => {
-                const remaining = monthlyGoal - actual;
-                if (remaining <= 0) return 0;
-                return remaining / remainingDays;
+            // 現在の変換率を計算（チェーン: 投稿→アポ獲得→アポ実施→動員獲得→動員実施→成約）
+            const convRate = (numerator, denominator) => denominator > 0 ? numerator / denominator : 0;
+            const rates = {
+                seiyaku: convRate(t.seiyaku, t.doinExec),        // 成約率 = 成約/動員実施
+                doinExec: convRate(t.doinExec, t.doinGet),       // 動員実施率 = 動員実施/動員獲得
+                doinGet: convRate(t.doinGet, t.apoExec),         // 動員率 = 動員獲得/アポ実施
+                apoExec: convRate(t.apoExec, t.apoGet),          // アポ実施率 = アポ実施/アポ獲得
+                apoGet: convRate(t.apoGet, t.post || 0),         // アポ獲得率 = アポ獲得/投稿
+                mendanExec: convRate(t.mendanExec, t.mendanGet)  // 面談実施率 = 面談実施/面談獲得
             };
 
+            // 直接の日当たり必要数（目標残 / 残日数）
+            const directDaily = (goal, actual) => Math.max(goal - actual, 0) / remainingDays;
+
+            // 成約から逆算して各指標の日当たり必要数を計算
+            // 成約: 直接目標のみ
+            const seiyakuDaily = directDaily(g.seiyaku || 0, t.seiyaku);
+
+            // 動員直クロ実施: MAX(直接目標, 成約必要数/成約率)
+            const doinExecChain = rates.seiyaku > 0 ? seiyakuDaily / rates.seiyaku : 0;
+            const doinExecDaily = Math.max(directDaily(g.doinExec || 0, t.doinExec), doinExecChain);
+
+            // 動員直クロ獲得: MAX(直接目標, 動員実施必要数/動員実施率)
+            const doinGetChain = rates.doinExec > 0 ? doinExecDaily / rates.doinExec : 0;
+            const doinGetDaily = Math.max(directDaily(g.doinGet || 0, t.doinGet), doinGetChain);
+
+            // アポ実施: MAX(直接目標, 動員獲得必要数/動員率)
+            const apoExecChain = rates.doinGet > 0 ? doinGetDaily / rates.doinGet : 0;
+            const apoExecDaily = Math.max(directDaily(g.apoExec || 0, t.apoExec), apoExecChain);
+
+            // アポ獲得: MAX(直接目標, アポ実施必要数/アポ実施率)
+            const apoGetChain = rates.apoExec > 0 ? apoExecDaily / rates.apoExec : 0;
+            const apoGetDaily = Math.max(directDaily(g.apoGet || 0, t.apoGet), apoGetChain);
+
+            // 投稿: MAX(直接目標, アポ獲得必要数/アポ獲得率)
+            const postChain = rates.apoGet > 0 ? apoGetDaily / rates.apoGet : 0;
+            const postDaily = Math.max(directDaily(g.post || 0, t.post || 0), postChain);
+
+            // 面談獲得: 直接目標のみ
+            const mendanGetDaily = directDaily(g.mendan || 0, t.mendanGet);
+
+            // 面談実施: MAX(直接目標, 面談獲得必要数/面談実施率)
+            const mendanExecChain = rates.mendanExec > 0 ? mendanGetDaily / rates.mendanExec : 0;
+            const mendanExecDaily = Math.max(directDaily(g.mendanExec || 0, t.mendanExec), mendanExecChain);
+
             // 残り日当たり表示を更新する関数
-            const setDailyDisplay = (elId, monthlyGoal, actual) => {
+            const setDailyDisplay = (elId, dailyNeeded, monthlyGoal, actual) => {
                 const el = document.getElementById(elId);
                 if (!el) return;
                 if (!isCurrentMonth) {
                     el.textContent = '';
                     return;
                 }
-                const daily = getDailyNeeded(monthlyGoal, actual);
-                const remaining = monthlyGoal - actual;
-                if (remaining <= 0) {
+                if ((monthlyGoal - actual) <= 0) {
                     el.innerHTML = '<span style="color:#22c55e">達成!</span>';
                 } else {
-                    el.textContent = `残${remainingDays}日 / 日当たり${daily.toFixed(1)}`;
+                    el.textContent = `残${remainingDays}日 / 日当たり${dailyNeeded.toFixed(1)}`;
                 }
             };
 
             document.getElementById('sPost').textContent = t.post || 0;
             document.getElementById('sPostGoal').textContent = getTarget(g.post || 0).toFixed(1);
             setRateDisplay('sPostRate', 'sPostBar', t.post || 0, getTarget(g.post || 0));
-            setDailyDisplay('sPostDaily', g.post || 0, t.post || 0);
+            setDailyDisplay('sPostDaily', postDaily, g.post || 0, t.post || 0);
 
             document.getElementById('sApoGet').textContent = t.apoGet;
             document.getElementById('sApoGetGoal').textContent = getTarget(g.apoGet).toFixed(1);
             setRateDisplay('sApoGetRate', 'sApoGetBar', t.apoGet, getTarget(g.apoGet));
-            setDailyDisplay('sApoGetDaily', g.apoGet || 0, t.apoGet);
+            setDailyDisplay('sApoGetDaily', apoGetDaily, g.apoGet || 0, t.apoGet);
 
             document.getElementById('sApoExec').textContent = t.apoExec;
             document.getElementById('sApoExecGoal').textContent = getTarget(g.apoExec).toFixed(1);
             setRateDisplay('sApoExecRate', 'sApoExecBar', t.apoExec, getTarget(g.apoExec));
-            setDailyDisplay('sApoExecDaily', g.apoExec || 0, t.apoExec);
+            setDailyDisplay('sApoExecDaily', apoExecDaily, g.apoExec || 0, t.apoExec);
 
             document.getElementById('sDoinGet').textContent = t.doinGet;
             document.getElementById('sDoinGetGoal').textContent = getTarget(g.doinGet).toFixed(1);
             setRateDisplay('sDoinGetRate', 'sDoinGetBar', t.doinGet, getTarget(g.doinGet));
-            setDailyDisplay('sDoinGetDaily', g.doinGet || 0, t.doinGet);
+            setDailyDisplay('sDoinGetDaily', doinGetDaily, g.doinGet || 0, t.doinGet);
 
             document.getElementById('sDoinExec').textContent = t.doinExec;
             document.getElementById('sDoinExecGoal').textContent = getTarget(g.doinExec).toFixed(1);
             setRateDisplay('sDoinExecRate', 'sDoinExecBar', t.doinExec, getTarget(g.doinExec));
-            setDailyDisplay('sDoinExecDaily', g.doinExec || 0, t.doinExec);
+            setDailyDisplay('sDoinExecDaily', doinExecDaily, g.doinExec || 0, t.doinExec);
 
             document.getElementById('sMendan').textContent = t.mendanGet;
             document.getElementById('sMendanGoal').textContent = getTarget(g.mendan).toFixed(1);
             setRateDisplay('sMendanRate', 'sMendanBar', t.mendanGet, getTarget(g.mendan));
-            setDailyDisplay('sMendanDaily', g.mendan || 0, t.mendanGet);
+            setDailyDisplay('sMendanDaily', mendanGetDaily, g.mendan || 0, t.mendanGet);
 
             document.getElementById('sMendanExec').textContent = t.mendanExec;
             document.getElementById('sMendanExecGoal').textContent = getTarget(g.mendanExec || 0).toFixed(1);
             setRateDisplay('sMendanExecRate', 'sMendanExecBar', t.mendanExec, getTarget(g.mendanExec || 0));
-            setDailyDisplay('sMendanExecDaily', g.mendanExec || 0, t.mendanExec);
+            setDailyDisplay('sMendanExecDaily', mendanExecDaily, g.mendanExec || 0, t.mendanExec);
 
             document.getElementById('sSeiyaku').textContent = t.seiyaku;
             document.getElementById('sSeiyakuGoal').textContent = getTarget(g.seiyaku).toFixed(1);
             setRateDisplay('sSeiyakuRate', 'sSeiyakuBar', t.seiyaku, getTarget(g.seiyaku));
-            setDailyDisplay('sSeiyakuDaily', g.seiyaku || 0, t.seiyaku);
+            setDailyDisplay('sSeiyakuDaily', seiyakuDaily, g.seiyaku || 0, t.seiyaku);
 
             // KPI自動計算
             document.getElementById('kMuchaku').textContent = pct(t.muchaku, t.apoExec);
