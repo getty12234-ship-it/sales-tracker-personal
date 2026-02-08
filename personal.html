@@ -2454,7 +2454,7 @@
             const setDailyDisplay = (elId, monthlyGoal, actual) => {
                 const el = document.getElementById(elId);
                 if (!el) return;
-                if (viewPeriod !== 'month' || !isCurrentMonth) {
+                if (!isCurrentMonth) {
                     el.textContent = '';
                     return;
                 }
@@ -2515,15 +2515,15 @@
             document.getElementById('kOffer').textContent = pct(t.offer, t.apoExec);
 
             // 無着地内訳を表示
-            renderSummaryMuchakuBreakdown();
+            try { renderSummaryMuchakuBreakdown(); } catch(e) { console.error('renderSummaryMuchakuBreakdown:', e); }
             // NG理由内訳を表示
-            renderSummaryNgBreakdown();
+            try { renderSummaryNgBreakdown(); } catch(e) { console.error('renderSummaryNgBreakdown:', e); }
 
             // 残案件・キャンセル・動員後無着地を表示
-            renderSummaryCasesAndCancels();
+            try { renderSummaryCasesAndCancels(); } catch(e) { console.error('renderSummaryCasesAndCancels:', e); }
 
             // チャートを描画
-            renderLargeCharts();
+            try { renderLargeCharts(); } catch(e) { console.error('renderLargeCharts:', e); }
         }
 
         function renderSummaryMuchakuBreakdown() {
@@ -2769,9 +2769,10 @@
             ngReasonLabels.forEach((_, i) => ngTotals[i] = 0);
 
             if (viewPeriod === 'month') {
-                for (let w = 1; w <= 5; w++) {
+                const maxWNg = getMaxWeekNum(currentYear, currentMonth);
+                for (let w = 1; w <= maxWNg; w++) {
                     const weekKey = `${currentYear}-${currentMonth}-W${w}`;
-                    if (data.weeks[weekKey]) {
+                    if (data.weeks[weekKey] && data.weeks[weekKey].daily) {
                         members.forEach(member => {
                             const d = data.weeks[weekKey].daily[member.id];
                             if (d && d.ngReasonsByDay) {
@@ -2810,16 +2811,18 @@
             document.getElementById('rsNgTotal').textContent = `(${ngTotal}件)`;
 
             // 残案件（メンバーでフィルタリング + 月表示対応）
+            const reviewData = getWeekData().review;
             let allCases = [];
             if (viewPeriod === 'month') {
-                for (let w = 1; w <= 5; w++) {
+                const maxWCases = getMaxWeekNum(currentYear, currentMonth);
+                for (let w = 1; w <= maxWCases; w++) {
                     const weekKey = `${currentYear}-${currentMonth}-W${w}`;
                     if (data.weeks[weekKey] && data.weeks[weekKey].review && data.weeks[weekKey].review.cases) {
                         allCases = allCases.concat(data.weeks[weekKey].review.cases);
                     }
                 }
             } else {
-                allCases = r.cases || [];
+                allCases = reviewData.cases || [];
             }
             const filteredCases = allCases.filter(c => selectedMember === 'all' || !c.memberId || c.memberId === selectedMember);
             document.getElementById('rsCasesCount').textContent = `(${filteredCases.length}件)`;
@@ -2833,14 +2836,15 @@
             // キャンセル（メンバーでフィルタリング + 理由表示 + 月表示対応）
             let allCancels = [];
             if (viewPeriod === 'month') {
-                for (let w = 1; w <= 5; w++) {
+                const maxWCancels = getMaxWeekNum(currentYear, currentMonth);
+                for (let w = 1; w <= maxWCancels; w++) {
                     const weekKey = `${currentYear}-${currentMonth}-W${w}`;
                     if (data.weeks[weekKey] && data.weeks[weekKey].review && data.weeks[weekKey].review.cancels) {
                         allCancels = allCancels.concat(data.weeks[weekKey].review.cancels);
                     }
                 }
             } else {
-                allCancels = r.cancels || [];
+                allCancels = reviewData.cancels || [];
             }
             const filteredCancels = allCancels.filter(c => selectedMember === 'all' || !c.memberId || c.memberId === selectedMember);
             document.getElementById('rsCancelsCount').textContent = `(${filteredCancels.length}件)`;
@@ -2855,14 +2859,15 @@
             // 動員後無着地（メンバーでフィルタリング + 月表示対応）
             let allDoinMuchaku = [];
             if (viewPeriod === 'month') {
-                for (let w = 1; w <= 5; w++) {
+                const maxWDoin = getMaxWeekNum(currentYear, currentMonth);
+                for (let w = 1; w <= maxWDoin; w++) {
                     const weekKey = `${currentYear}-${currentMonth}-W${w}`;
                     if (data.weeks[weekKey] && data.weeks[weekKey].review && data.weeks[weekKey].review.doinMuchakuList) {
                         allDoinMuchaku = allDoinMuchaku.concat(data.weeks[weekKey].review.doinMuchakuList);
                     }
                 }
             } else {
-                allDoinMuchaku = r.doinMuchakuList || [];
+                allDoinMuchaku = reviewData.doinMuchakuList || [];
             }
             const filteredDoinMuchaku = allDoinMuchaku.filter(item => selectedMember === 'all' || !item.memberId || item.memberId === selectedMember);
             document.getElementById('rsDoinMuchakuCount').textContent = `(${filteredDoinMuchaku.length}件)`;
