@@ -937,6 +937,7 @@
                     <div class="sub">目標: <span id="sPostGoal">0</span></div>
                     <div class="rate" id="sPostRate">0%</div>
                     <div class="progress-bar"><div class="fill" id="sPostBar"></div></div>
+                    <div class="sub" style="margin-top:4px;color:#f59e0b" id="sPostDaily"></div>
                 </div>
                 <div class="summary-card">
                     <h4>アポ獲得</h4>
@@ -944,6 +945,7 @@
                     <div class="sub">目標: <span id="sApoGetGoal">0</span></div>
                     <div class="rate" id="sApoGetRate">0%</div>
                     <div class="progress-bar"><div class="fill" id="sApoGetBar"></div></div>
+                    <div class="sub" style="margin-top:4px;color:#f59e0b" id="sApoGetDaily"></div>
                 </div>
                 <div class="summary-card">
                     <h4>アポ実施</h4>
@@ -951,6 +953,7 @@
                     <div class="sub">目標: <span id="sApoExecGoal">0</span></div>
                     <div class="rate" id="sApoExecRate">0%</div>
                     <div class="progress-bar"><div class="fill" id="sApoExecBar"></div></div>
+                    <div class="sub" style="margin-top:4px;color:#f59e0b" id="sApoExecDaily"></div>
                 </div>
                 <div class="summary-card">
                     <h4>動員直クロ獲得</h4>
@@ -958,6 +961,7 @@
                     <div class="sub">目標: <span id="sDoinGetGoal">0</span></div>
                     <div class="rate" id="sDoinGetRate">0%</div>
                     <div class="progress-bar"><div class="fill" id="sDoinGetBar"></div></div>
+                    <div class="sub" style="margin-top:4px;color:#f59e0b" id="sDoinGetDaily"></div>
                 </div>
                 <div class="summary-card">
                     <h4>動員直クロ実施</h4>
@@ -965,6 +969,7 @@
                     <div class="sub">目標: <span id="sDoinExecGoal">0</span></div>
                     <div class="rate" id="sDoinExecRate">0%</div>
                     <div class="progress-bar"><div class="fill" id="sDoinExecBar"></div></div>
+                    <div class="sub" style="margin-top:4px;color:#f59e0b" id="sDoinExecDaily"></div>
                 </div>
                 <div class="summary-card">
                     <h4>面談獲得</h4>
@@ -972,6 +977,7 @@
                     <div class="sub">目標: <span id="sMendanGoal">0</span></div>
                     <div class="rate" id="sMendanRate">0%</div>
                     <div class="progress-bar"><div class="fill" id="sMendanBar"></div></div>
+                    <div class="sub" style="margin-top:4px;color:#f59e0b" id="sMendanDaily"></div>
                 </div>
                 <div class="summary-card">
                     <h4>面談実施</h4>
@@ -979,6 +985,7 @@
                     <div class="sub">目標: <span id="sMendanExecGoal">0</span></div>
                     <div class="rate" id="sMendanExecRate">0%</div>
                     <div class="progress-bar"><div class="fill" id="sMendanExecBar"></div></div>
+                    <div class="sub" style="margin-top:4px;color:#f59e0b" id="sMendanExecDaily"></div>
                 </div>
                 <div class="summary-card">
                     <h4>成約</h4>
@@ -986,6 +993,7 @@
                     <div class="sub">目標: <span id="sSeiyakuGoal">0</span></div>
                     <div class="rate" id="sSeiyakuRate">0%</div>
                     <div class="progress-bar"><div class="fill" id="sSeiyakuBar"></div></div>
+                    <div class="sub" style="margin-top:4px;color:#f59e0b" id="sSeiyakuDaily"></div>
                 </div>
             </div>
 
@@ -1668,6 +1676,22 @@
         const muchakuReasonLabels = ['こだわりが強い', '横槍', '勧誘ブロック', '不安が強い', '今じゃない', '完全副業ニーズ', 'その他'];
         const ngReasonLabels = ['金策NG', '既婚NG', '職業NG', 'スタンスNG', '精神NG'];
 
+        // 安全な配列合計（Firebaseがarrayをobjectに変換するケースに対応）
+        function safeArraySum(arr) {
+            if (!arr) return 0;
+            if (Array.isArray(arr)) return arr.reduce((a, b) => a + (b || 0), 0);
+            if (typeof arr === 'object') return Object.values(arr).reduce((a, b) => a + (b || 0), 0);
+            return 0;
+        }
+
+        // 月の最大週番号を計算（土曜始まりオフセット考慮）
+        function getMaxWeekNum(year, month) {
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const firstDay = new Date(year, month - 1, 1);
+            const dow = (firstDay.getDay() + 1) % 7;
+            return Math.ceil((daysInMonth + dow) / 7);
+        }
+
         // チームパスワード（新規登録時のゲート用）
         const TEAM_PASSWORD = 'hagamori';
 
@@ -1793,7 +1817,7 @@
             document.getElementById('memberLinkForm').style.display = 'block';
             hideAuthError();
 
-            // 既にマッピングされているメンバーIDを収集
+            // 既にマッピングされているメンバーIDを収集（表示用）
             const linkedMemberIds = new Set();
             for (const uid in userMap) {
                 if (userMap[uid].memberId) linkedMemberIds.add(userMap[uid].memberId);
@@ -1802,15 +1826,13 @@
             const select = document.getElementById('memberLinkSelect');
             select.innerHTML = '<option value="">-- メンバーを選択 --</option>';
             data.members.forEach(m => {
-                if (!linkedMemberIds.has(m.id)) {
-                    select.innerHTML += `<option value="${m.id}">${m.name}</option>`;
-                }
+                const linked = linkedMemberIds.has(m.id);
+                const label = linked ? `${m.name}（紐付け済み）` : m.name;
+                select.innerHTML += `<option value="${m.id}">${label}</option>`;
             });
-            // リンク可能なメンバーがない場合
+            // メンバーがない場合
             if (data.members.length === 0) {
-                select.innerHTML += '<option value="" disabled>（メンバーが登録されていません。管理者に連絡してください）</option>';
-            } else if (select.options.length === 1) {
-                select.innerHTML += '<option value="" disabled>（全メンバーが紐付け済みです）</option>';
+                select.innerHTML += '<option value="" disabled>（メンバーが登録されていません。下の欄に名前を入力してください）</option>';
             }
         }
 
@@ -1820,8 +1842,8 @@
 
             // どちらも未入力ならエラー
             if (!memberId && !newName) { showAuthError('メンバーを選択するか、名前を入力してください'); return; }
-            // 両方入力されている場合は新規名前を優先
-            if (newName) memberId = null;
+            // ドロップダウン選択がある場合はそちらを優先（新規名前はドロップダウン未選択時のみ）
+            if (!memberId && newName) memberId = null;
 
             hideAuthError();
             const btn = document.getElementById('linkBtn');
@@ -1829,8 +1851,8 @@
             try {
                 const uid = currentAuthUser.uid;
 
-                // 新しい名前が入力された場合、メンバーを自動追加
-                if (newName) {
+                // ドロップダウン未選択 + 新しい名前が入力された場合、メンバーを自動追加
+                if (!memberId && newName) {
                     memberId = 'mem_' + Date.now();
                     const newMember = { id: memberId, name: newName };
                     data.members.push(newMember);
@@ -2313,14 +2335,16 @@
             const members = selectedMember === 'all' ? data.members : data.members.filter(m => m.id === selectedMember);
 
             if (viewPeriod === 'month') {
-                for (let w = 1; w <= 5; w++) {
+                const maxW = getMaxWeekNum(currentYear, currentMonth);
+                for (let w = 1; w <= maxW; w++) {
                     const weekKey = `${currentYear}-${currentMonth}-W${w}`;
-                    if (data.weeks[weekKey]) {
+                    const weekData = data.weeks[weekKey];
+                    if (weekData && weekData.daily) {
                         members.forEach(m => {
-                            const d = data.weeks[weekKey].daily[m.id];
+                            const d = weekData.daily[m.id];
                             if (d) {
                                 metrics.forEach(c => c.items.forEach(met => {
-                                    t[met.key] += (d[met.key] || [0,0,0,0,0,0,0]).reduce((a,b)=>a+b,0);
+                                    t[met.key] += safeArraySum(d[met.key]);
                                 }));
                             }
                         });
@@ -2330,7 +2354,7 @@
                 members.forEach(m => {
                     const d = getMemberDaily(m.id);
                     metrics.forEach(c => c.items.forEach(met => {
-                        t[met.key] += (d[met.key] || [0,0,0,0,0,0,0]).reduce((a,b)=>a+b,0);
+                        t[met.key] += safeArraySum(d[met.key]);
                     }));
                 });
             }
@@ -2342,19 +2366,21 @@
             metrics.forEach(c => c.items.forEach(m => t[m.key] = 0));
 
             if (viewPeriod === 'month') {
-                for (let w = 1; w <= 5; w++) {
+                const maxW = getMaxWeekNum(currentYear, currentMonth);
+                for (let w = 1; w <= maxW; w++) {
                     const weekKey = `${currentYear}-${currentMonth}-W${w}`;
-                    if (data.weeks[weekKey] && data.weeks[weekKey].daily[memberId]) {
-                        const d = data.weeks[weekKey].daily[memberId];
+                    const weekData = data.weeks[weekKey];
+                    if (weekData && weekData.daily && weekData.daily[memberId]) {
+                        const d = weekData.daily[memberId];
                         metrics.forEach(c => c.items.forEach(met => {
-                            t[met.key] += (d[met.key] || [0,0,0,0,0,0,0]).reduce((a,b)=>a+b,0);
+                            t[met.key] += safeArraySum(d[met.key]);
                         }));
                     }
                 }
             } else {
                 const d = getMemberDaily(memberId);
                 metrics.forEach(c => c.items.forEach(met => {
-                    t[met.key] += (d[met.key] || [0,0,0,0,0,0,0]).reduce((a,b)=>a+b,0);
+                    t[met.key] += safeArraySum(d[met.key]);
                 }));
             }
             return t;
@@ -2397,55 +2423,89 @@
             }
             console.log('📊 renderSummary - selectedMember:', selectedMember, '目標:', JSON.stringify(g));
 
-            // 今日までに達成すべき目標を計算
+            // 今日までに達成すべき目標を計算（使える日数 = 月末日数 - 3）
             const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+            const effectiveDays = daysInMonth - 3; // 使える日数
             const today = new Date();
-            const currentDay = (today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth)
-                ? today.getDate() : daysInMonth;
+            const isCurrentMonth = (today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth);
+            const currentDay = isCurrentMonth ? today.getDate() : effectiveDays;
+            const remainingDays = Math.max(effectiveDays - currentDay, 1); // 残り日数（最低1）
 
-            // 目標を計算する関数
+            // 今日までの目標を計算する関数
             const getTarget = (monthlyGoal) => {
                 if (viewPeriod === 'month') {
-                    // 月次：今日までの日割り目標
-                    return (monthlyGoal / daysInMonth) * currentDay;
+                    // 月次：今日までの日割り目標（使える日数ベース）
+                    return (monthlyGoal / effectiveDays) * Math.min(currentDay, effectiveDays);
                 } else {
-                    // 週次：月間目標を日割り×7日（どの週でも同じ目標）
-                    const weeklyGoal = monthlyGoal / daysInMonth * 7;
+                    // 週次：月間目標を使える日数で日割り×7日
+                    const weeklyGoal = (monthlyGoal / effectiveDays) * 7;
                     return weeklyGoal;
+                }
+            };
+
+            // 残り日当たり必要数を計算する関数
+            const getDailyNeeded = (monthlyGoal, actual) => {
+                const remaining = monthlyGoal - actual;
+                if (remaining <= 0) return 0;
+                return remaining / remainingDays;
+            };
+
+            // 残り日当たり表示を更新する関数
+            const setDailyDisplay = (elId, monthlyGoal, actual) => {
+                const el = document.getElementById(elId);
+                if (!el) return;
+                if (viewPeriod !== 'month' || !isCurrentMonth) {
+                    el.textContent = '';
+                    return;
+                }
+                const daily = getDailyNeeded(monthlyGoal, actual);
+                const remaining = monthlyGoal - actual;
+                if (remaining <= 0) {
+                    el.innerHTML = '<span style="color:#22c55e">達成!</span>';
+                } else {
+                    el.textContent = `残${remainingDays}日 / 日当たり${daily.toFixed(1)}`;
                 }
             };
 
             document.getElementById('sPost').textContent = t.post || 0;
             document.getElementById('sPostGoal').textContent = getTarget(g.post || 0).toFixed(1);
             setRateDisplay('sPostRate', 'sPostBar', t.post || 0, getTarget(g.post || 0));
+            setDailyDisplay('sPostDaily', g.post || 0, t.post || 0);
 
             document.getElementById('sApoGet').textContent = t.apoGet;
             document.getElementById('sApoGetGoal').textContent = getTarget(g.apoGet).toFixed(1);
             setRateDisplay('sApoGetRate', 'sApoGetBar', t.apoGet, getTarget(g.apoGet));
+            setDailyDisplay('sApoGetDaily', g.apoGet || 0, t.apoGet);
 
             document.getElementById('sApoExec').textContent = t.apoExec;
             document.getElementById('sApoExecGoal').textContent = getTarget(g.apoExec).toFixed(1);
             setRateDisplay('sApoExecRate', 'sApoExecBar', t.apoExec, getTarget(g.apoExec));
+            setDailyDisplay('sApoExecDaily', g.apoExec || 0, t.apoExec);
 
             document.getElementById('sDoinGet').textContent = t.doinGet;
             document.getElementById('sDoinGetGoal').textContent = getTarget(g.doinGet).toFixed(1);
             setRateDisplay('sDoinGetRate', 'sDoinGetBar', t.doinGet, getTarget(g.doinGet));
+            setDailyDisplay('sDoinGetDaily', g.doinGet || 0, t.doinGet);
 
             document.getElementById('sDoinExec').textContent = t.doinExec;
             document.getElementById('sDoinExecGoal').textContent = getTarget(g.doinExec).toFixed(1);
             setRateDisplay('sDoinExecRate', 'sDoinExecBar', t.doinExec, getTarget(g.doinExec));
+            setDailyDisplay('sDoinExecDaily', g.doinExec || 0, t.doinExec);
 
             document.getElementById('sMendan').textContent = t.mendanGet;
             document.getElementById('sMendanGoal').textContent = getTarget(g.mendan).toFixed(1);
             setRateDisplay('sMendanRate', 'sMendanBar', t.mendanGet, getTarget(g.mendan));
+            setDailyDisplay('sMendanDaily', g.mendan || 0, t.mendanGet);
 
             document.getElementById('sMendanExec').textContent = t.mendanExec;
             document.getElementById('sMendanExecGoal').textContent = getTarget(g.mendanExec || 0).toFixed(1);
             setRateDisplay('sMendanExecRate', 'sMendanExecBar', t.mendanExec, getTarget(g.mendanExec || 0));
+            setDailyDisplay('sMendanExecDaily', g.mendanExec || 0, t.mendanExec);
 
             document.getElementById('sSeiyaku').textContent = t.seiyaku;
             document.getElementById('sSeiyakuGoal').textContent = getTarget(g.seiyaku).toFixed(1);
             setRateDisplay('sSeiyakuRate', 'sSeiyakuBar', t.seiyaku, getTarget(g.seiyaku));
+            setDailyDisplay('sSeiyakuDaily', g.seiyaku || 0, t.seiyaku);
 
             // KPI自動計算
             document.getElementById('kMuchaku').textContent = pct(t.muchaku, t.apoExec);
@@ -2474,11 +2534,13 @@
 
             if (viewPeriod === 'month') {
                 // 月全体の集計
-                for (let w = 1; w <= 5; w++) {
+                const maxW = getMaxWeekNum(currentYear, currentMonth);
+                for (let w = 1; w <= maxW; w++) {
                     const weekKey = `${currentYear}-${currentMonth}-W${w}`;
-                    if (data.weeks[weekKey]) {
+                    const weekData = data.weeks[weekKey];
+                    if (weekData && weekData.daily) {
                         members.forEach(member => {
-                            const d = data.weeks[weekKey].daily[member.id];
+                            const d = weekData.daily[member.id];
                             if (d && d.muchakuReasonsByDay) {
                                 for (let day = 0; day < 7; day++) {
                                     const dayData = d.muchakuReasonsByDay[day] || {};
@@ -2526,11 +2588,13 @@
 
             if (viewPeriod === 'month') {
                 // 月全体の集計
-                for (let w = 1; w <= 5; w++) {
+                const maxW = getMaxWeekNum(currentYear, currentMonth);
+                for (let w = 1; w <= maxW; w++) {
                     const weekKey = `${currentYear}-${currentMonth}-W${w}`;
-                    if (data.weeks[weekKey]) {
+                    const weekData = data.weeks[weekKey];
+                    if (weekData && weekData.daily) {
                         members.forEach(member => {
-                            const d = data.weeks[weekKey].daily[member.id];
+                            const d = weekData.daily[member.id];
                             if (d && d.ngReasonsByDay) {
                                 for (let day = 0; day < 7; day++) {
                                     const dayData = d.ngReasonsByDay[day] || {};
@@ -2605,12 +2669,13 @@
                 g = getMemberGoals(selectedMember);
             }
 
-            // 目標計算
+            // 目標計算（使える日数 = 月末日数 - 3）
             const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+            const effectiveDays = daysInMonth - 3;
             const today = new Date();
             const currentDay = (today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth)
-                ? today.getDate() : daysInMonth;
-            const getTarget = (monthlyGoal) => Math.ceil((monthlyGoal || 0) / daysInMonth * currentDay);
+                ? today.getDate() : effectiveDays;
+            const getTarget = (monthlyGoal) => Math.ceil((monthlyGoal || 0) / effectiveDays * Math.min(currentDay, effectiveDays));
 
             // 数字とプログレスバー
             const metrics = [
@@ -2646,11 +2711,13 @@
             muchakuReasonLabels.forEach((_, i) => muchakuTotals[i] = 0);
 
             if (viewPeriod === 'month') {
-                for (let w = 1; w <= 5; w++) {
+                const maxW = getMaxWeekNum(currentYear, currentMonth);
+                for (let w = 1; w <= maxW; w++) {
                     const weekKey = `${currentYear}-${currentMonth}-W${w}`;
-                    if (data.weeks[weekKey]) {
+                    const weekData = data.weeks[weekKey];
+                    if (weekData && weekData.daily) {
                         members.forEach(member => {
-                            const d = data.weeks[weekKey].daily[member.id];
+                            const d = weekData.daily[member.id];
                             if (d && d.muchakuReasonsByDay) {
                                 for (let day = 0; day < 7; day++) {
                                     const dayData = d.muchakuReasonsByDay[day] || {};
@@ -2955,6 +3022,7 @@
 
         function getChartData(metricKey, monthlyGoal) {
             const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+            const effectiveDays = daysInMonth - 3; // 使える日数
             let actualData = [];
             let targetData = [];
             let labels = [];
@@ -2962,19 +3030,19 @@
 
             if (viewPeriod === 'month') {
                 numDays = daysInMonth;
-                const dailyGoal = monthlyGoal / daysInMonth;
+                const dailyGoal = monthlyGoal / effectiveDays;
 
                 let cumulative = 0;
                 for (let day = 1; day <= daysInMonth; day++) {
                     const dayValue = getDayValueForChart(metricKey, day);
                     cumulative += dayValue;
                     actualData.push(cumulative);
-                    targetData.push(dailyGoal * day);
+                    targetData.push(dailyGoal * Math.min(day, effectiveDays));
                     labels.push(day.toString());
                 }
             } else {
                 numDays = 7;
-                const weeklyGoal = (monthlyGoal / daysInMonth) * 7;
+                const weeklyGoal = (monthlyGoal / effectiveDays) * 7;
                 const dailyGoal = weeklyGoal / 7;
                 const dates = getWeekDates();
                 const dayNames = ['土','日','月','火','水','木','金'];
@@ -3006,8 +3074,14 @@
 
             let total = 0;
             members.forEach(m => {
-                if (data.weeks[weekKey] && data.weeks[weekKey].daily[m.id]) {
-                    total += (data.weeks[weekKey].daily[m.id][metricKey] || [0,0,0,0,0,0,0])[dayOfWeek] || 0;
+                const weekData = data.weeks[weekKey];
+                if (weekData && weekData.daily && weekData.daily[m.id]) {
+                    const arr = weekData.daily[m.id][metricKey];
+                    if (Array.isArray(arr)) {
+                        total += arr[dayOfWeek] || 0;
+                    } else if (arr && typeof arr === 'object') {
+                        total += arr[dayOfWeek] || 0;
+                    }
                 }
             });
             return total;
@@ -3246,8 +3320,10 @@
             const dayOfWeek = (date.getDay() + 1) % 7;
 
             const weekKey = `${currentYear}-${currentMonth}-W${weekNum}`;
-            if (data.weeks[weekKey] && data.weeks[weekKey].daily[memberId]) {
-                return (data.weeks[weekKey].daily[memberId][metricKey] || [0,0,0,0,0,0,0])[dayOfWeek] || 0;
+            const weekData = data.weeks[weekKey];
+            if (weekData && weekData.daily && weekData.daily[memberId]) {
+                const arr = weekData.daily[memberId][metricKey];
+                if (arr) return (Array.isArray(arr) ? arr : Object.values(arr))[dayOfWeek] || 0;
             }
             return 0;
         }
@@ -5726,6 +5802,26 @@
                 if (!data.members) data.members = [];
                 if (data.accounts && !Array.isArray(data.accounts)) {
                     data.accounts = Object.values(data.accounts);
+                }
+
+                // daily内のメトリック配列を修復
+                if (data.weeks) {
+                    for (const wk in data.weeks) {
+                        const w = data.weeks[wk];
+                        if (w && w.daily) {
+                            for (const mid in w.daily) {
+                                const d = w.daily[mid];
+                                if (d) {
+                                    metrics.forEach(c => c.items.forEach(met => {
+                                        if (d[met.key] && !Array.isArray(d[met.key]) && typeof d[met.key] === 'object') {
+                                            const obj = d[met.key];
+                                            d[met.key] = [0,0,0,0,0,0,0].map((_, i) => obj[i] || 0);
+                                        }
+                                    }));
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // userMapの更新
