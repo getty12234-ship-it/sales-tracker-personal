@@ -1010,6 +1010,9 @@
                     <div class="kpi-item"><div class="label">NG率</div><div class="value" id="kNg">0%</div></div>
                     <div class="kpi-item"><div class="label">テスクロ率</div><div class="value" id="kTestClose">0%</div></div>
                     <div class="kpi-item"><div class="label">オファー率</div><div class="value" id="kOffer">0%</div></div>
+                    <div class="kpi-item"><div class="label">動員獲得率</div><div class="value" id="kDoinGetRate">0%</div></div>
+                    <div class="kpi-item"><div class="label">動員実施率</div><div class="value" id="kDoinExecRate">0%</div></div>
+                    <div class="kpi-item"><div class="label">成約率</div><div class="value" id="kSeiyakuRate">0%</div></div>
                 </div>
             </div>
 
@@ -2549,6 +2552,9 @@
             document.getElementById('kNg').textContent = pct(t.ng, t.apoExec);
             document.getElementById('kTestClose').textContent = pct(t.testClose, t.apoExec);
             document.getElementById('kOffer').textContent = pct(t.offer, t.apoExec);
+            document.getElementById('kDoinGetRate').textContent = pct(t.doinGet, t.apoExec);
+            document.getElementById('kDoinExecRate').textContent = pct(t.doinExec, t.apoExec);
+            document.getElementById('kSeiyakuRate').textContent = pct(t.seiyaku, t.doinExec);
 
             // 無着地内訳を表示
             try { renderSummaryMuchakuBreakdown(); } catch(e) { console.error('renderSummaryMuchakuBreakdown:', e); }
