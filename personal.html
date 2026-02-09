@@ -789,6 +789,165 @@
             font-size: 13px;
         }
     </style>
+    <script>
+    // === Supabase連携（appointment-manager） ===
+    const SUPABASE_URL = 'https://pbctrjnnrvssdyywgtdx.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBiY3Ryam5ucnZzc2R5eXdndGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5ODA2MDgsImV4cCI6MjA4NTU1NjYwOH0.MTOIZ9enImEiakaxyNb-SGw6QFeYFia83cmOk5TSnq4';
+
+    // 残案件ステータス
+    const SUPABASE_ACTIVE_STATUSES = [
+        '相談会動員','直クロ動員','日程調整中',
+        '直クロセットアップ','直クロフォロー',
+        'ライン交換',
+        '再クロセットアップ','再クロフォロー',
+        '再々クロセットアップ','再々クロフォロー',
+        '面談セットアップ','面談フォロー','面談着地',
+        '教育中'
+    ];
+
+    // 動員キャンセルステータス
+    const SUPABASE_CANCEL_STATUSES = ['動員キャンセル'];
+    // 動員後無着地ステータス
+    const SUPABASE_POST_MOB_STATUSES = ['動員後無着地'];
+
+    // Supabaseからデータ取得
+    async function fetchSupabaseActiveCases() {
+        try {
+            const statusFilter = SUPABASE_ACTIVE_STATUSES.map(s => encodeURIComponent(s)).join(',');
+            const url = `${SUPABASE_URL}/rest/v1/appointments?status=in.(${statusFilter})&is_deleted=eq.false&select=id,status,created_at,closer_id,notes,customer:customers!inner(name,cloudworks_url),user:profiles!appointments_user_id_fkey(name),closer:profiles!appointments_closer_id_fkey(name)&order=created_at.desc`;
+            const res = await fetch(url, {
+                headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+            });
+            if (!res.ok) return [];
+            return await res.json();
+        } catch (e) { console.error('Supabase残案件取得エラー:', e); return []; }
+    }
+
+    async function fetchSupabaseCancels() {
+        try {
+            const url = `${SUPABASE_URL}/rest/v1/appointments?status=eq.動員キャンセル&is_deleted=eq.false&select=id,status,cancel_reason,created_at,customer:customers!inner(name),user:profiles!appointments_user_id_fkey(name),closer:profiles!appointments_closer_id_fkey(name)&order=created_at.desc`;
+            const res = await fetch(url, {
+                headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+            });
+            if (!res.ok) return [];
+            return await res.json();
+        } catch (e) { console.error('Supabaseキャンセル取得エラー:', e); return []; }
+    }
+
+    async function fetchSupabasePostMob() {
+        try {
+            const url = `${SUPABASE_URL}/rest/v1/appointments?status=eq.動員後無着地&is_deleted=eq.false&select=id,status,post_mobilization_reason,created_at,customer:customers!inner(name),user:profiles!appointments_user_id_fkey(name)&order=created_at.desc`;
+            const res = await fetch(url, {
+                headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+            });
+            if (!res.ok) return [];
+            return await res.json();
+        } catch (e) { console.error('Supabase動員後無着地取得エラー:', e); return []; }
+    }
+
+    // ステータス短縮名
+    const STATUS_SHORT_MAP = {
+        '相談会動員':'相談会','直クロ動員':'直クロ動員','日程調整中':'日程調整',
+        '直クロセットアップ':'直クロSU','直クロフォロー':'直クロF',
+        'ライン交換':'LINE',
+        '再クロセットアップ':'再クロSU','再クロフォロー':'再クロF',
+        '再々クロセットアップ':'再々クロSU','再々クロフォロー':'再々クロF',
+        '面談セットアップ':'面談SU','面談フォロー':'面談F','面談着地':'面談着地',
+        '教育中':'教育中'
+    };
+
+    // Supabase残案件をサマリーに描画
+    let supabaseCasesCache = [];
+    let supabaseCancelsCache = [];
+    let supabasePostMobCache = [];
+
+    async function syncSupabaseCases() {
+        const [cases, cancels, postMob] = await Promise.all([
+            fetchSupabaseActiveCases(),
+            fetchSupabaseCancels(),
+            fetchSupabasePostMob()
+        ]);
+        supabaseCasesCache = cases;
+        supabaseCancelsCache = cancels;
+        supabasePostMobCache = postMob;
+        renderSupabaseSummary();
+        renderSupabaseInputSection();
+    }
+
+    function renderSupabaseSummary() {
+        // サマリーの残案件
+        const el = document.getElementById('rsCasesList');
+        const countEl = document.getElementById('rsCasesCount');
+        if (!el || !countEl) return;
+
+        const cases = supabaseCasesCache;
+        countEl.textContent = `(${cases.length}件 - アポ管理連携)`;
+        el.innerHTML = cases.length === 0
+            ? '<p style="color:#64748b">残案件なし</p>'
+            : cases.map(c => {
+                const st = STATUS_SHORT_MAP[c.status] || c.status;
+                const closer = c.closer ? c.closer.name : '';
+                return `<div style="padding:4px;background:#0f172a;border-radius:4px;margin-bottom:4px">
+                    <span style="font-size:9px;background:#3b82f6;padding:1px 4px;border-radius:3px;margin-right:4px">${st}</span>
+                    ${c.customer?.name || '不明'}
+                    <span style="color:#64748b;font-size:10px;margin-left:4px">${c.user?.name || ''}</span>
+                    ${closer ? `<span style="color:#64748b;font-size:10px"> / ${closer}</span>` : ''}
+                </div>`;
+            }).join('');
+
+        // サマリーのキャンセル
+        const cancelEl = document.getElementById('rsCancelsList');
+        const cancelCountEl = document.getElementById('rsCancelsCount');
+        if (cancelEl && cancelCountEl) {
+            const cancels = supabaseCancelsCache;
+            cancelCountEl.textContent = `(${cancels.length}件)`;
+            cancelEl.innerHTML = cancels.length === 0
+                ? '<p style="color:#64748b">なし</p>'
+                : cancels.map(c => `<div style="padding:4px;background:#0f172a;border-radius:4px;margin-bottom:4px;border-left:2px solid #eab308">
+                    ${c.customer?.name || '不明'}
+                    <span style="color:#eab308;font-size:11px">${c.cancel_reason || ''}</span>
+                </div>`).join('');
+        }
+
+        // サマリーの動員後無着地
+        const postEl = document.getElementById('rsDoinMuchakuList');
+        const postCountEl = document.getElementById('rsDoinMuchakuCount');
+        if (postEl && postCountEl) {
+            const postMob = supabasePostMobCache;
+            postCountEl.textContent = `(${postMob.length}件)`;
+            postEl.innerHTML = postMob.length === 0
+                ? '<p style="color:#64748b">なし</p>'
+                : postMob.map(c => `<div style="padding:4px;background:#0f172a;border-radius:4px;margin-bottom:4px;border-left:2px solid #ef4444">
+                    ${c.customer?.name || '不明'}
+                    <span style="color:#ef4444;font-size:11px">${c.post_mobilization_reason || ''}</span>
+                </div>`).join('');
+        }
+    }
+
+    function renderSupabaseInputSection() {
+        // 入力セクションの残案件リスト
+        const el = document.getElementById('caseList');
+        const countEl = document.getElementById('sCasesCount');
+        if (!el || !countEl) return;
+
+        const cases = supabaseCasesCache;
+        countEl.textContent = `(${cases.length}件 - アポ管理連携)`;
+        el.innerHTML = cases.length === 0
+            ? '<p style="color:#64748b;font-size:13px">残案件なし</p>'
+            : cases.map(c => {
+                const st = STATUS_SHORT_MAP[c.status] || c.status;
+                const date = new Date(c.created_at).toLocaleDateString('ja-JP', {month:'short',day:'numeric'});
+                const closer = c.closer ? c.closer.name : '';
+                return `<div class="case-item" style="opacity:0.85">
+                    <span style="font-size:10px;background:#3b82f6;color:white;padding:1px 6px;border-radius:4px;margin-right:4px;white-space:nowrap">${st}</span>
+                    <span style="flex:1;font-size:12px">${c.customer?.name || '不明'}</span>
+                    <span style="font-size:11px;color:#64748b">${c.user?.name || ''}</span>
+                    ${closer ? `<span style="font-size:11px;color:#64748b"> / ${closer}</span>` : ''}
+                    <span style="font-size:10px;color:#475569">${date}</span>
+                </div>`;
+            }).join('');
+    }
+    </script>
 </head>
 <body>
     <!-- Firebase認証モーダル -->
@@ -2010,6 +2169,8 @@
             updateSyncStatus();
             renderAll();
             applySeasonalBackground();
+            // アポ管理システム（Supabase）から残案件を同期
+            syncSupabaseCases();
         }
 
         function init() {
@@ -2940,7 +3101,9 @@
             document.getElementById('rsNgBreakdown').innerHTML = ngBreakdownHtml;
             document.getElementById('rsNgTotal').textContent = `(${ngTotal}件)`;
 
-            // 残案件（メンバーでフィルタリング + 月表示対応）
+            // 残案件（Supabase連携時はスキップ）
+            if (supabaseCasesCache && supabaseCasesCache.length > 0) { renderSupabaseSummary(); }
+            else {
             const reviewData = getWeekData().review;
             let allCases = [];
             if (viewPeriod === 'month') {
@@ -2962,6 +3125,7 @@
                     const badge = memberName ? `<span style="font-size:9px;background:#6366f1;padding:1px 4px;border-radius:3px;margin-right:4px">${memberName}</span>` : '';
                     return `<div style="padding:4px;background:#0f172a;border-radius:4px;margin-bottom:4px">${badge}${c.date || '-'} ${c.customer || '未入力'} <span style="color:#64748b;font-size:11px">${c.closer || ''}</span></div>`;
                 }).join('');
+            } // Supabase連携 else ブロック終了
 
             // キャンセル（メンバーでフィルタリング + 理由表示 + 月表示対応）
             let allCancels = [];
@@ -3722,8 +3886,9 @@
             return reasons.counts && reasons.counts.some(c => c > 0);
         }
 
-        // 残案件
+        // 残案件（Supabase連携時はスキップ）
         function renderCases() {
+            if (supabaseCasesCache && supabaseCasesCache.length > 0) { renderSupabaseInputSection(); return; }
             const allCases = getWeekData().review.cases || [];
             // メンバーでフィルタリング（元のインデックスを保持）
             const filteredCases = allCases.map((c, i) => ({...c, _idx: i}))
