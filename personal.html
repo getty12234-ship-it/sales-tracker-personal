@@ -814,7 +814,7 @@
     async function fetchSupabaseActiveCases() {
         try {
             const statusFilter = SUPABASE_ACTIVE_STATUSES.map(s => encodeURIComponent(s)).join(',');
-            const url = `${SUPABASE_URL}/rest/v1/appointments?status=in.(${statusFilter})&is_deleted=eq.false&select=id,status,created_at,closer_id,notes,customer:customers!inner(name,cloudworks_url),user:profiles!appointments_user_id_fkey(name),closer:profiles!appointments_closer_id_fkey(name)&order=created_at.desc`;
+            const url = `${SUPABASE_URL}/rest/v1/appointments?status=in.(${statusFilter})&is_deleted=eq.false&select=id,status,created_at,closer_id,notes,customer:customers!inner(name,cloudworks_url),user:profiles!appointments_user_id_fkey(id,name),closer:profiles!appointments_closer_id_fkey(id,name)&order=created_at.desc`;
             const res = await fetch(url, {
                 headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
             });
@@ -825,7 +825,7 @@
 
     async function fetchSupabaseCancels() {
         try {
-            const url = `${SUPABASE_URL}/rest/v1/appointments?status=eq.動員キャンセル&is_deleted=eq.false&select=id,status,cancel_reason,created_at,customer:customers!inner(name),user:profiles!appointments_user_id_fkey(name),closer:profiles!appointments_closer_id_fkey(name)&order=created_at.desc`;
+            const url = `${SUPABASE_URL}/rest/v1/appointments?status=eq.動員キャンセル&is_deleted=eq.false&select=id,status,cancel_reason,created_at,customer:customers!inner(name),user:profiles!appointments_user_id_fkey(id,name),closer:profiles!appointments_closer_id_fkey(id,name)&order=created_at.desc`;
             const res = await fetch(url, {
                 headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
             });
@@ -836,7 +836,7 @@
 
     async function fetchSupabasePostMob() {
         try {
-            const url = `${SUPABASE_URL}/rest/v1/appointments?status=eq.動員後無着地&is_deleted=eq.false&select=id,status,post_mobilization_reason,created_at,customer:customers!inner(name),user:profiles!appointments_user_id_fkey(name)&order=created_at.desc`;
+            const url = `${SUPABASE_URL}/rest/v1/appointments?status=eq.動員後無着地&is_deleted=eq.false&select=id,status,post_mobilization_reason,created_at,customer:customers!inner(name),user:profiles!appointments_user_id_fkey(id,name)&order=created_at.desc`;
             const res = await fetch(url, {
                 headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
             });
@@ -861,24 +861,60 @@
     let supabaseCancelsCache = [];
     let supabasePostMobCache = [];
 
-    // Supabaseのuser.nameから施策ツールのmemberIdを逆引き
-    function supabaseNameToMemberId(userName) {
-        if (!userName || typeof data === 'undefined' || !data.members) return null;
-        const match = data.members.find(m => m.name === userName);
-        return match ? match.id : null;
+    // メールマッピング: Supabase user_id → email
+    let supabaseEmailMap = {}; // { supabase_user_id: email }
+
+    // アポ管理ツールからメールマッピングを取得
+    const APPOINTMENT_MANAGER_URL = 'http://localhost:3000';
+    async function fetchEmailMapping() {
+        try {
+            const res = await fetch(`${APPOINTMENT_MANAGER_URL}/api/email-mapping`);
+            if (!res.ok) return;
+            const mapping = await res.json();
+            // { supabase_user_id: email } のマップを構築
+            supabaseEmailMap = {};
+            mapping.forEach(u => { supabaseEmailMap[u.id] = u.email; });
+            console.log('Supabaseメールマッピング取得:', Object.keys(supabaseEmailMap).length, '件');
+        } catch (e) {
+            console.warn('メールマッピング取得失敗（名前ベースにフォールバック）:', e.message);
+        }
+    }
+
+    // Supabaseユーザーから施策ツールのmemberIdを逆引き（メール優先、名前フォールバック）
+    function supabaseUserToMemberId(user) {
+        if (!user || typeof data === 'undefined' || !data.members) return null;
+
+        // 方法1: メールアドレスでマッチング（Firebase userMap経由）
+        if (typeof userMap !== 'undefined' && user.id && supabaseEmailMap[user.id]) {
+            const supabaseEmail = supabaseEmailMap[user.id];
+            for (const uid in userMap) {
+                if (userMap[uid].email === supabaseEmail && userMap[uid].memberId) {
+                    return userMap[uid].memberId;
+                }
+            }
+        }
+
+        // 方法2: 名前でフォールバック
+        if (user.name) {
+            const match = data.members.find(m => m.name === user.name);
+            if (match) return match.id;
+        }
+
+        return null;
     }
 
     // 施策ツールのメンバーフィルタを適用
     function filterBySelectedMember(items) {
         if (typeof selectedMember === 'undefined' || selectedMember === 'all') return items;
         return items.filter(item => {
-            const userName = item.user?.name;
-            const memberId = supabaseNameToMemberId(userName);
+            const memberId = supabaseUserToMemberId(item.user);
             return memberId === selectedMember;
         });
     }
 
     async function syncSupabaseCases() {
+        // メールマッピングを先に取得
+        await fetchEmailMapping();
         const [cases, cancels, postMob] = await Promise.all([
             fetchSupabaseActiveCases(),
             fetchSupabaseCancels(),
