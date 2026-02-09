@@ -861,6 +861,23 @@
     let supabaseCancelsCache = [];
     let supabasePostMobCache = [];
 
+    // Supabaseのuser.nameから施策ツールのmemberIdを逆引き
+    function supabaseNameToMemberId(userName) {
+        if (!userName || typeof data === 'undefined' || !data.members) return null;
+        const match = data.members.find(m => m.name === userName);
+        return match ? match.id : null;
+    }
+
+    // 施策ツールのメンバーフィルタを適用
+    function filterBySelectedMember(items) {
+        if (typeof selectedMember === 'undefined' || selectedMember === 'all') return items;
+        return items.filter(item => {
+            const userName = item.user?.name;
+            const memberId = supabaseNameToMemberId(userName);
+            return memberId === selectedMember;
+        });
+    }
+
     async function syncSupabaseCases() {
         const [cases, cancels, postMob] = await Promise.all([
             fetchSupabaseActiveCases(),
@@ -880,7 +897,7 @@
         const countEl = document.getElementById('rsCasesCount');
         if (!el || !countEl) return;
 
-        const cases = supabaseCasesCache;
+        const cases = filterBySelectedMember(supabaseCasesCache);
         countEl.textContent = `(${cases.length}件 - アポ管理連携)`;
         el.innerHTML = cases.length === 0
             ? '<p style="color:#64748b">残案件なし</p>'
@@ -899,7 +916,7 @@
         const cancelEl = document.getElementById('rsCancelsList');
         const cancelCountEl = document.getElementById('rsCancelsCount');
         if (cancelEl && cancelCountEl) {
-            const cancels = supabaseCancelsCache;
+            const cancels = filterBySelectedMember(supabaseCancelsCache);
             cancelCountEl.textContent = `(${cancels.length}件)`;
             cancelEl.innerHTML = cancels.length === 0
                 ? '<p style="color:#64748b">なし</p>'
@@ -913,7 +930,7 @@
         const postEl = document.getElementById('rsDoinMuchakuList');
         const postCountEl = document.getElementById('rsDoinMuchakuCount');
         if (postEl && postCountEl) {
-            const postMob = supabasePostMobCache;
+            const postMob = filterBySelectedMember(supabasePostMobCache);
             postCountEl.textContent = `(${postMob.length}件)`;
             postEl.innerHTML = postMob.length === 0
                 ? '<p style="color:#64748b">なし</p>'
@@ -930,7 +947,7 @@
         const countEl = document.getElementById('sCasesCount');
         if (!el || !countEl) return;
 
-        const cases = supabaseCasesCache;
+        const cases = filterBySelectedMember(supabaseCasesCache);
         countEl.textContent = `(${cases.length}件 - アポ管理連携)`;
         el.innerHTML = cases.length === 0
             ? '<p style="color:#64748b;font-size:13px">残案件なし</p>'
@@ -2516,6 +2533,9 @@
             try { renderReview(); } catch(e) { console.error('renderReview:', e.message); }
             try { renderInstagram(); } catch(e) { console.error('renderInstagram:', e.message); }
             try { renderSettings(); } catch(e) { console.error('renderSettings:', e.message); }
+            // Supabase連携データの再レンダリング（メンバー選択でフィルタ反映）
+            try { renderSupabaseSummary(); } catch(e) { console.error('renderSupabaseSummary:', e.message); }
+            try { renderSupabaseInputSection(); } catch(e) { console.error('renderSupabaseInputSection:', e.message); }
         }
 
         function renderMemberSelect() {
