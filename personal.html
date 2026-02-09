@@ -2652,33 +2652,40 @@
             // 直接の日当たり必要数（目標残 / 残日数）
             const directDaily = (goal, actual) => Math.max(goal - actual, 0) / remainingDays;
 
-            // 成約から逆算して各指標の日当たり必要数を計算
+            // ===== 計画ベース: 目標値から暗黙の転換率を計算して逆算 =====
+            const planRates = {
+                seiyaku: convRate(g.seiyaku || 0, g.doinExec || 0),
+                doinExec: convRate(g.doinExec || 0, g.doinGet || 0),
+                doinGet: convRate(g.doinGet || 0, g.apoExec || 0),
+                apoExec: convRate(g.apoExec || 0, g.apoGet || 0),
+                apoGet: convRate(g.apoGet || 0, g.post || 0),
+                mendanExec: convRate(g.mendanExec || 0, g.mendan || 0)
+            };
+
             const seiyakuDaily = directDaily(g.seiyaku || 0, t.seiyaku);
 
-            const doinExecChain = rates.seiyaku > 0 ? seiyakuDaily / rates.seiyaku : 0;
+            const doinExecChain = planRates.seiyaku > 0 ? seiyakuDaily / planRates.seiyaku : 0;
             const doinExecDaily = Math.max(directDaily(g.doinExec || 0, t.doinExec), doinExecChain);
 
-            const doinGetChain = rates.doinExec > 0 ? doinExecDaily / rates.doinExec : 0;
+            const doinGetChain = planRates.doinExec > 0 ? doinExecDaily / planRates.doinExec : 0;
             const doinGetDaily = Math.max(directDaily(g.doinGet || 0, t.doinGet), doinGetChain);
 
-            const apoExecChain = rates.doinGet > 0 ? doinGetDaily / rates.doinGet : 0;
+            const apoExecChain = planRates.doinGet > 0 ? doinGetDaily / planRates.doinGet : 0;
             const apoExecDaily = Math.max(directDaily(g.apoExec || 0, t.apoExec), apoExecChain);
 
-            const apoGetChain = rates.apoExec > 0 ? apoExecDaily / rates.apoExec : 0;
+            const apoGetChain = planRates.apoExec > 0 ? apoExecDaily / planRates.apoExec : 0;
             const apoGetDaily = Math.max(directDaily(g.apoGet || 0, t.apoGet), apoGetChain);
 
-            const postChain = rates.apoGet > 0 ? apoGetDaily / rates.apoGet : 0;
+            const postChain = planRates.apoGet > 0 ? apoGetDaily / planRates.apoGet : 0;
             const postDaily = Math.max(directDaily(g.post || 0, t.post || 0), postChain);
 
             const mendanGetDaily = directDaily(g.mendan || 0, t.mendanGet);
 
-            const mendanExecChain = rates.mendanExec > 0 ? mendanGetDaily / rates.mendanExec : 0;
+            const mendanExecChain = planRates.mendanExec > 0 ? mendanGetDaily / planRates.mendanExec : 0;
             const mendanExecDaily = Math.max(directDaily(g.mendanExec || 0, t.mendanExec), mendanExecChain);
 
-            // Change 8: 実績ベースのチェーン計算（現在の実際の変換率を使用）
-            // 計画ベースは上記の rates を使用（目標値からの暗黙の変換率）
-            // 実績ベースは実際のデータから計算した変換率を使用
-            const hasEnoughData = (t.post > 0 || t.apoGet > 0); // 十分なデータがあるか
+            // ===== 実績ベース: 実際のデータの転換率を使って逆算 =====
+            const hasEnoughData = (t.apoGet > 2 || t.apoExec > 1); // 最低限のデータがあるか
             let actualPostDaily = postDaily;
             let actualApoGetDaily = apoGetDaily;
             let actualApoExecDaily = apoExecDaily;
@@ -2689,7 +2696,7 @@
             let actualSeiyakuDaily = seiyakuDaily;
 
             if (hasEnoughData) {
-                // 実績ベースの逆算（成約目標残から逆算、実績の変換率を使用）
+                // 実績ベースの逆算（成約目標残から逆算、実績の変換率 rates を使用）
                 actualSeiyakuDaily = directDaily(g.seiyaku || 0, t.seiyaku);
 
                 const actDoinExecChain = rates.seiyaku > 0 ? actualSeiyakuDaily / rates.seiyaku : 0;
@@ -5361,9 +5368,11 @@
                 console.error('❌ 設定読み込みエラー:', e);
             }
 
-            // Change 6: 乖離チェックを実行
+            // Change 6: 乖離チェックを実行（設定タブで選択中のメンバーを使用）
             try {
-                checkRatesDivergence(selectedMember);
+                const divergenceMember = (settingsSelectedMember && settingsSelectedMember !== 'all')
+                    ? settingsSelectedMember : selectedMember;
+                checkRatesDivergence(divergenceMember);
             } catch (e) {
                 console.error('❌ 乖離チェックエラー:', e);
             }
@@ -5388,6 +5397,9 @@
 
             // 設定を読み込み
             loadMemberSettings(settingsSelectedMember);
+
+            // 乖離チェックも更新
+            try { checkRatesDivergence(settingsSelectedMember); } catch(e) { console.error('乖離チェックエラー:', e); }
 
             // 選択したメンバーの名前を表示
             const hintEl = document.getElementById('settingsHint');
@@ -6416,7 +6428,11 @@
             }
 
             const memberRates = data.monthlyRates[memberId];
-            const monthKeys = Object.keys(memberRates).sort().reverse(); // 新しい順
+            const monthKeys = Object.keys(memberRates).sort((a, b) => {
+                const [ay, am] = a.split('-').map(Number);
+                const [by, bm] = b.split('-').map(Number);
+                return (by * 12 + bm) - (ay * 12 + am); // 新しい順（年月を数値で比較）
+            });
 
             // 現在の月キーを除外（記録済みでも当月は除外）
             const currentMonthKey = getMonthKey();
@@ -6439,7 +6455,7 @@
                 let count = 0;
                 keysToUse.forEach(mk => {
                     const val = memberRates[mk][rk];
-                    if (val !== undefined && val !== null && !isNaN(val) && val > 0) {
+                    if (val !== undefined && val !== null && !isNaN(val)) {
                         sum += val;
                         count++;
                     }
@@ -6583,11 +6599,18 @@
                 }
             };
 
+            // 面談も逆算（面談実施率から）
+            const mendanGoal = rates.mendanExecRate > 0
+                ? Math.ceil(doinExecGoal / rates.mendanExecRate)
+                : doinExecGoal;
+
             setField('mPost', postGoal);
             setField('mApoGet', apoGetGoal);
             setField('mApoExec', apoExecGoal);
             setField('mDoinGet', doinGetGoal);
             setField('mDoinExec', doinExecGoal);
+            setField('mMendan', mendanGoal);
+            setField('mMendanExec', mendanGoal);
             setField('mSeiyaku', seiyakuGoal);
 
             // 確認メッセージ表示
