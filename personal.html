@@ -978,27 +978,8 @@
     }
 
     function renderSupabaseInputSection() {
-        // 入力セクションの残案件リスト
-        const el = document.getElementById('caseList');
-        const countEl = document.getElementById('sCasesCount');
-        if (!el || !countEl) return;
-
-        const cases = filterBySelectedMember(supabaseCasesCache);
-        countEl.textContent = `(${cases.length}件 - アポ管理連携)`;
-        el.innerHTML = cases.length === 0
-            ? '<p style="color:#64748b;font-size:13px">残案件なし</p>'
-            : cases.map(c => {
-                const st = STATUS_SHORT_MAP[c.status] || c.status;
-                const date = new Date(c.created_at).toLocaleDateString('ja-JP', {month:'short',day:'numeric'});
-                const closer = c.closer ? c.closer.name : '';
-                return `<div class="case-item" style="opacity:0.85">
-                    <span style="font-size:10px;background:#3b82f6;color:white;padding:1px 6px;border-radius:4px;margin-right:4px;white-space:nowrap">${st}</span>
-                    <span style="flex:1;font-size:12px">${c.customer?.name || '不明'}</span>
-                    <span style="font-size:11px;color:#64748b">${c.user?.name || ''}</span>
-                    ${closer ? `<span style="font-size:11px;color:#64748b"> / ${closer}</span>` : ''}
-                    <span style="font-size:10px;color:#475569">${date}</span>
-                </div>`;
-            }).join('');
+        // renderCases()に統合済み - 互換性のためrenderCasesを呼び出す
+        renderCases();
     }
     </script>
 </head>
@@ -2342,6 +2323,10 @@
                 cases: [],
                 cancels: []
             };
+            // 既存データにcases/cancels/doinMuchakuListがない場合の初期化
+            if (!data.weeks[k].review.cases) data.weeks[k].review.cases = [];
+            if (!data.weeks[k].review.cancels) data.weeks[k].review.cancels = [];
+            if (!data.weeks[k].review.doinMuchakuList) data.weeks[k].review.doinMuchakuList = [];
             return data.weeks[k];
         }
 
@@ -3949,30 +3934,55 @@
             return reasons.counts && reasons.counts.some(c => c > 0);
         }
 
-        // 残案件（Supabase連携時はスキップ）
+        // 残案件（Supabase連携 + ローカル手動追加の両方を表示）
         function renderCases() {
-            if (supabaseCasesCache && supabaseCasesCache.length > 0) { renderSupabaseInputSection(); return; }
+            let html = '';
+            let totalCount = 0;
+            let hasSupabase = supabaseCasesCache && supabaseCasesCache.length > 0;
+
+            // Supabase連携データを表示
+            if (hasSupabase) {
+                const cases = filterBySelectedMember(supabaseCasesCache);
+                totalCount += cases.length;
+                html += cases.map(c => {
+                    const st = STATUS_SHORT_MAP[c.status] || c.status;
+                    const date = new Date(c.created_at).toLocaleDateString('ja-JP', {month:'short',day:'numeric'});
+                    const closer = c.closer ? c.closer.name : '';
+                    return `<div class="case-item" style="opacity:0.85">
+                        <span style="font-size:10px;background:#3b82f6;color:white;padding:1px 6px;border-radius:4px;margin-right:4px;white-space:nowrap">${st}</span>
+                        <span style="flex:1;font-size:12px">${c.customer?.name || '不明'}</span>
+                        <span style="font-size:11px;color:#64748b">${c.user?.name || ''}</span>
+                        ${closer ? `<span style="font-size:11px;color:#64748b"> / ${closer}</span>` : ''}
+                        <span style="font-size:10px;color:#475569">${date}</span>
+                    </div>`;
+                }).join('');
+            }
+
+            // ローカル手動追加データを表示
             const allCases = getWeekData().review.cases || [];
-            // メンバーでフィルタリング（元のインデックスを保持）
             const filteredCases = allCases.map((c, i) => ({...c, _idx: i}))
                 .filter(c => selectedMember === 'all' || !c.memberId || c.memberId === selectedMember);
-            document.getElementById('sCasesCount').textContent = `(${filteredCases.length}件)`;
-            document.getElementById('caseList').innerHTML = filteredCases.length === 0 ? '<p style="color:#64748b;font-size:13px">残案件なし</p>' :
-                filteredCases.map(c => {
-                    const isEditable = !c.memberId || canEditMember(c.memberId);
-                    const memberName = c.memberId ? (data.members.find(m => m.id === c.memberId)?.name || '') : '';
-                    const memberBadge = selectedMember === 'all' && memberName ? `<span style="font-size:10px;background:#6366f1;padding:2px 6px;border-radius:4px;margin-right:4px">${memberName}</span>` : '';
-                    return `<div class="case-item" style="${isEditable ? '' : 'opacity:0.6'}">${memberBadge}<input type="text" value="${c.date||''}" placeholder="日付" onchange="updateCase(${c._idx},'date',this.value)" ${isEditable ? '' : 'disabled'}><input type="text" value="${c.customer||''}" placeholder="顧客名" onchange="updateCase(${c._idx},'customer',this.value)" ${isEditable ? '' : 'disabled'}><input type="text" value="${c.closer||''}" placeholder="クローザー" onchange="updateCase(${c._idx},'closer',this.value)" ${isEditable ? '' : 'disabled'}><button class="btn btn-danger btn-sm" onclick="deleteCase(${c._idx})" ${isEditable ? '' : 'disabled'}>×</button></div>`;
-                }).join('');
+            totalCount += filteredCases.length;
+            html += filteredCases.map(c => {
+                const isEditable = !c.memberId || canEditMember(c.memberId);
+                const memberName = c.memberId ? (data.members.find(m => m.id === c.memberId)?.name || '') : '';
+                const memberBadge = selectedMember === 'all' && memberName ? `<span style="font-size:10px;background:#6366f1;padding:2px 6px;border-radius:4px;margin-right:4px">${memberName}</span>` : '';
+                return `<div class="case-item" style="${isEditable ? '' : 'opacity:0.6'}">${memberBadge}<input type="text" value="${c.date||''}" placeholder="日付" onchange="updateCase(${c._idx},'date',this.value)" ${isEditable ? '' : 'disabled'}><input type="text" value="${c.customer||''}" placeholder="顧客名" onchange="updateCase(${c._idx},'customer',this.value)" ${isEditable ? '' : 'disabled'}><input type="text" value="${c.closer||''}" placeholder="クローザー" onchange="updateCase(${c._idx},'closer',this.value)" ${isEditable ? '' : 'disabled'}><button class="btn btn-danger btn-sm" onclick="deleteCase(${c._idx})" ${isEditable ? '' : 'disabled'}>×</button></div>`;
+            }).join('');
+
+            document.getElementById('sCasesCount').textContent = hasSupabase ? `(${totalCount}件 - アポ管理連携)` : `(${totalCount}件)`;
+            document.getElementById('caseList').innerHTML = html || '<p style="color:#64748b;font-size:13px">残案件なし</p>';
         }
         function addCase() {
             const currentUserId = getCurrentMemberId();
             if (!currentUserId) { alert('ユーザーを設定してください'); return; }
-            getWeekData().review.cases.push({ memberId: currentUserId });
+            const r = getWeekData().review;
+            if (!r.cases) r.cases = [];
+            r.cases.push({ memberId: currentUserId });
             saveData(); renderCases();
         }
-        function updateCase(i,k,v) { getWeekData().review.cases[i][k] = v; saveData(); }
-        function deleteCase(i) { getWeekData().review.cases.splice(i,1); saveData(); renderCases(); }
+        function updateCase(i,k,v) { const r = getWeekData().review; if (!r.cases) r.cases = []; r.cases[i][k] = v; saveData(); }
+        function deleteCase(i) { const r = getWeekData().review; if (!r.cases) r.cases = []; r.cases.splice(i,1); saveData(); renderCases(); }
 
         // キャンセル
         function renderCancels() {
@@ -4002,7 +4012,9 @@
         function addCancel() {
             const currentUserId = getCurrentMemberId();
             if (!currentUserId) { alert('ユーザーを設定してください'); return; }
-            getWeekData().review.cancels.push({ memberId: currentUserId });
+            const r = getWeekData().review;
+            if (!r.cancels) r.cancels = [];
+            r.cancels.push({ memberId: currentUserId });
             saveData(); renderCancels();
         }
         function updateCancel(i,k,v) { getWeekData().review.cancels[i][k] = v; saveData(); renderCancels(); }
