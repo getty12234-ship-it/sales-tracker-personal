@@ -2025,7 +2025,12 @@
                 const uid = currentAuthUser.uid;
                 if (userMap[uid]) {
                     currentMemberId = userMap[uid].memberId;
-                    isAdmin = !!userMap[uid].isAdmin;
+                    // 既存ユーザーも管理者に昇格
+                    if (!userMap[uid].isAdmin) {
+                        await database.ref('teams/' + TEAM_ID + '/userMap/' + uid + '/isAdmin').set(true);
+                        userMap[uid].isAdmin = true;
+                    }
+                    isAdmin = true;
                     return true; // マッピングあり
                 }
                 return false; // マッピングなし
@@ -2088,22 +2093,19 @@
                     console.log('新メンバー自動追加:', newName, memberId);
                 }
 
-                // userMapが空なら最初のユーザー → 自動Admin
-                const isFirstUser = Object.keys(userMap).length === 0;
+                // 新規ユーザーは全員管理者として登録
                 const entry = {
                     memberId: memberId,
                     email: currentAuthUser.email,
-                    isAdmin: isFirstUser,
+                    isAdmin: true,
                     linkedAt: Date.now()
                 };
                 await database.ref('teams/' + TEAM_ID + '/userMap/' + uid).set(entry);
                 userMap[uid] = entry;
                 currentMemberId = memberId;
-                isAdmin = isFirstUser;
+                isAdmin = true;
 
-                if (isFirstUser) {
-                    console.log('🔑 最初のユーザーとして管理者に設定されました');
-                }
+                console.log('🔑 管理者として設定されました');
 
                 // アプリ表示
                 document.getElementById('authModal').style.display = 'none';
