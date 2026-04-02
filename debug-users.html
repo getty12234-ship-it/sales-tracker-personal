@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ユーザー情報確認</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDky9IIUZNbgFvv5kQFKFyFIMddTBYMBOE",
+            authDomain: "sales-tracker-1e15a.firebaseapp.com",
+            databaseURL: "https://sales-tracker-1e15a-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "sales-tracker-1e15a",
+            storageBucket: "sales-tracker-1e15a.firebasestorage.app",
+            messagingSenderId: "342349456010",
+            appId: "1:342349456010:web:a6c08087598bdbccf10373"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const auth = firebase.auth();
+    </script>
+    <style>
+        body { font-family: monospace; background: #111; color: #0f0; padding: 20px; }
+        pre { white-space: pre-wrap; word-break: break-all; }
+        button { padding: 10px 20px; font-size: 16px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; font-size: 14px; margin: 5px; width: 300px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <h1>Firebase ユーザー情報デバッグ</h1>
+
+    <div class="section">
+        <h2>1. まずログイン（既存アカウントで）</h2>
+        <input type="email" id="email" placeholder="メールアドレス">
+        <input type="password" id="password" placeholder="パスワード">
+        <button onclick="login()">ログイン</button>
+        <button onclick="signup()">新規登録（チームPW: Cv6bL3yZ）</button>
+        <div id="loginStatus" style="margin-top:10px"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. データ読み取り（ログイン後）</h2>
+        <button onclick="readAll()">全データ読み取り</button>
+    </div>
+
+    <div class="section">
+        <h2>結果</h2>
+        <h3>userMap:</h3>
+        <pre id="userMapData">未取得</pre>
+        <h3>members:</h3>
+        <pre id="membersData">未取得</pre>
+        <h3>全チームデータキー:</h3>
+        <pre id="allKeys">未取得</pre>
+    </div>
+
+    <script>
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                const cred = await auth.signInWithEmailAndPassword(email, password);
+                document.getElementById('loginStatus').textContent =
+                    'ログイン成功! UID: ' + cred.user.uid + ' / Email: ' + cred.user.email;
+                readAll();
+            } catch(e) {
+                document.getElementById('loginStatus').textContent = 'エラー: ' + e.message;
+            }
+        }
+
+        async function signup() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                const cred = await auth.createUserWithEmailAndPassword(email, password);
+                document.getElementById('loginStatus').textContent =
+                    '登録成功! UID: ' + cred.user.uid + ' / Email: ' + cred.user.email;
+                readAll();
+            } catch(e) {
+                document.getElementById('loginStatus').textContent = 'エラー: ' + e.message;
+            }
+        }
+
+        async function readAll() {
+            try {
+                const snap = await database.ref('teams/personal').once('value');
+                const data = snap.val();
+                if (data) {
+                    document.getElementById('userMapData').textContent = JSON.stringify(data.userMap || 'なし', null, 2);
+                    document.getElementById('membersData').textContent = JSON.stringify(data.members || 'なし', null, 2);
+                    document.getElementById('allKeys').textContent = Object.keys(data).join('\n');
+                } else {
+                    document.getElementById('userMapData').textContent = 'データなし';
+                }
+            } catch(e) {
+                document.getElementById('userMapData').textContent = 'エラー: ' + e.message;
+            }
+        }
+
+        // 自動ログイン状態チェック
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('loginStatus').textContent =
+                    '既にログイン中: UID=' + user.uid + ' / Email=' + user.email;
+                readAll();
+            }
+        });
+    </script>
+</body>
+</html>
