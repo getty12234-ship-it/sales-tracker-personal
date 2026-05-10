@@ -1,0 +1,2105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>パーソナル施策ツール v2</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDky9IIUZNbgFvv5kQFKFyFIMddTBYMBOE",
+  authDomain: "sales-tracker-1e15a.firebaseapp.com",
+  databaseURL: "https://sales-tracker-1e15a-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "sales-tracker-1e15a",
+  storageBucket: "sales-tracker-1e15a.firebasestorage.app",
+  messagingSenderId: "342349456010",
+  appId: "1:342349456010:web:a6c08087598bdbccf10373"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const auth = firebase.auth();
+const TEAM_PATH = 'teams/personal';
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI','Meiryo',sans-serif;background:#0f172a;color:#e2e8f0;line-height:1.5;min-height:100vh}
+input,select,textarea{background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-size:13px;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.2)}
+textarea{resize:vertical}
+.container{max-width:1800px;margin:0 auto;padding:16px}
+
+/* Header */
+header{background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:16px 20px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+header h1{font-size:20px;font-weight:700}
+.header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sync-badge{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);padding:6px 12px;border-radius:20px;font-size:12px}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;transition:background .3s}
+.sync-dot.saving{background:#eab308;animation:blink 1s infinite}
+.sync-dot.error{background:#ef4444}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.header-btn{background:rgba(255,255,255,.2);border:none;color:white;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:500}
+.header-btn:hover{background:rgba(255,255,255,.3)}
+
+/* Week nav */
+.week-nav-wrap{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.15);padding:6px 12px;border-radius:20px}
+.week-nav-wrap button{background:none;border:none;color:white;cursor:pointer;font-size:16px;line-height:1;padding:0 4px}
+.week-nav-wrap span{font-size:13px;font-weight:600;min-width:180px;text-align:center}
+.period-toggle{display:flex;background:rgba(255,255,255,.15);border-radius:20px;overflow:hidden}
+.period-btn{padding:6px 14px;background:transparent;border:none;color:rgba(255,255,255,.7);font-size:12px;font-weight:500;cursor:pointer}
+.period-btn.active{background:rgba(255,255,255,.3);color:white}
+.member-sel{background:rgba(255,255,255,.15);border:none;color:white;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer}
+.member-sel option{background:#1e293b}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;background:#0f172a;padding:4px;border-radius:10px;border:1px solid #334155}
+.tab{flex:1;min-width:80px;padding:12px 16px;background:transparent;border:none;color:#94a3b8;font-size:13px;font-weight:600;cursor:pointer;border-radius:7px;transition:all .2s;text-align:center;white-space:nowrap}
+.tab:hover{background:#1e293b;color:#e2e8f0}
+.tab.active{background:#6366f1;color:white;box-shadow:0 2px 8px rgba(99,102,241,.3)}
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* Cards */
+.card{background:#1e293b;border-radius:12px;padding:20px;margin-bottom:16px;border:1px solid #334155}
+.card h2{font-size:15px;font-weight:600;margin-bottom:14px;color:#e2e8f0}
+.card h3{font-size:13px;font-weight:600;color:#94a3b8;margin:14px 0 10px}
+
+/* Summary grid */
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.kpi-card{background:#1e293b;border-radius:10px;padding:14px;border:1px solid #334155}
+.kpi-card h4{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.kpi-card .val{font-size:24px;font-weight:700;line-height:1}
+.kpi-card .sub{font-size:11px;color:#64748b;margin-top:3px}
+.kpi-card .rate{font-size:13px;font-weight:600;margin-top:2px}
+.progress-bar{width:100%;height:4px;background:#334155;border-radius:2px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;border-radius:2px;background:#6366f1;transition:width .3s}
+.progress-fill.good{background:#22c55e}
+.progress-fill.warn{background:#eab308}
+.progress-fill.danger{background:#ef4444}
+.daily-need{font-size:10px;color:#f59e0b;margin-top:3px}
+
+/* KPI Row */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px}
+.kpi-item{background:#0f172a;border-radius:8px;padding:12px;text-align:center}
+.kpi-item .label{font-size:10px;color:#64748b;margin-bottom:4px}
+.kpi-item .value{font-size:16px;font-weight:700}
+
+/* Colors */
+.c-green{color:#22c55e}.c-yellow{color:#eab308}.c-red{color:#ef4444}.c-blue{color:#6366f1}.c-gray{color:#94a3b8}
+
+/* Daily input table */
+.daily-wrap{overflow-x:auto}
+.daily-table{width:100%;border-collapse:collapse;font-size:12px;min-width:600px}
+.daily-table th{background:#0f172a;padding:8px 6px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#64748b;font-weight:600;position:sticky;top:0;z-index:5;white-space:nowrap}
+.daily-table th.label-col{text-align:left}
+.daily-table td{padding:4px 4px;border-bottom:1px solid rgba(51,65,85,.5);text-align:center}
+.daily-table td.label-col{text-align:left;font-weight:500;padding-left:8px;white-space:nowrap}
+.daily-table td.cat-row{background:#334155;font-weight:700;font-size:11px;padding:6px 8px;color:#e2e8f0}
+.daily-table td.total-col{background:#0f172a;font-weight:700;color:#6366f1}
+.daily-table tr:hover td{background:rgba(99,102,241,.05)}
+.daily-table tr:hover td.cat-row{background:#475569}
+.num-input{width:44px;text-align:center;padding:3px 4px;font-size:13px;background:transparent;border:1px solid transparent;border-radius:4px;color:#e2e8f0}
+.num-input:hover{border-color:#475569;background:#0f172a}
+.num-input:focus{border-color:#6366f1;background:#0f172a;box-shadow:0 0 0 2px rgba(99,102,241,.2)}
+
+/* Review */
+.issue-box{background:#0f172a;border-radius:8px;padding:14px;margin-bottom:10px}
+.issue-box label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.issue-box.red label{color:#ef4444}
+.issue-box.yellow label{color:#eab308}
+.issue-box input,.issue-box textarea{width:100%;background:transparent;border:none;border-bottom:1px solid #334155;border-radius:0;padding:4px 0;color:#e2e8f0;font-size:14px}
+.issue-box input:focus,.issue-box textarea:focus{border-bottom-color:#6366f1;box-shadow:none}
+.cause-card{background:#0f172a;border-radius:8px;padding:14px;margin-bottom:8px;border-left:3px solid #6366f1}
+.cause-input{width:100%;background:transparent;border:none;border-bottom:1px solid #334155;color:#e2e8f0;font-size:14px;padding:4px 0;margin-bottom:8px}
+.cause-input:focus{outline:none;border-bottom-color:#6366f1}
+.action-list{}
+.action-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.action-row input[type=checkbox]{width:16px;height:16px;accent-color:#22c55e;flex-shrink:0}
+.action-row input[type=text]{flex:1;background:transparent;border:none;border-bottom:1px solid #334155;color:#e2e8f0;font-size:13px;padding:3px 0;border-radius:0}
+.action-row input[type=text]:focus{outline:none;border-bottom-color:#6366f1}
+.action-add-btn{background:none;border:1px dashed #475569;color:#64748b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;width:100%;margin-top:4px}
+.action-add-btn:hover{border-color:#6366f1;color:#6366f1}
+
+/* Reason grid */
+.reason-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.reason-item{display:flex;align-items:center;justify-content:space-between;background:#0f172a;border-radius:6px;padding:8px 12px}
+.reason-item .reason-label{font-size:12px;color:#94a3b8}
+.reason-item input{width:56px;text-align:center;font-size:14px;font-weight:600}
+
+/* Case list */
+.case-item{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;padding:8px;background:#0f172a;border-radius:6px;margin-bottom:6px}
+.case-item input{padding:4px 8px;font-size:12px}
+.del-btn{background:#ef4444;border:none;color:white;width:24px;height:24px;border-radius:4px;cursor:pointer;font-size:14px;line-height:1}
+
+/* Nippo */
+.nippo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.nippo-card{background:#0f172a;border-radius:8px;padding:14px}
+.nippo-card h4{font-size:12px;color:#94a3b8;margin-bottom:10px;font-weight:600}
+.nippo-card input,.nippo-card textarea{width:100%;margin-bottom:8px;font-size:12px}
+.nippo-card textarea{min-height:60px}
+
+/* Instagram */
+.ig-table-wrap{overflow-x:auto}
+.ig-table{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}
+.ig-table th{background:#0f172a;padding:8px;text-align:center;font-size:10px;color:#64748b;font-weight:600;position:sticky;top:0}
+.ig-table td{padding:4px;border-bottom:1px solid rgba(51,65,85,.5);text-align:center}
+.ig-table td:first-child{text-align:left;padding-left:8px;font-weight:500}
+.ig-table .total-col{background:#0f172a;font-weight:700;color:#6366f1}
+
+/* Settings */
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.setting-item{background:#0f172a;border-radius:8px;padding:12px}
+.setting-item label{display:block;font-size:11px;color:#64748b;margin-bottom:6px}
+.setting-item input{width:100%;padding:6px 10px}
+
+/* Member list */
+.member-list-item{display:flex;align-items:center;gap:8px;padding:8px;background:#0f172a;border-radius:6px;margin-bottom:6px}
+.member-list-item span{flex:1;font-size:13px}
+.member-list-item .mbadge{font-size:10px;padding:2px 8px;border-radius:10px;background:#334155;color:#94a3b8}
+
+/* Buttons */
+.btn{padding:8px 16px;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:opacity .2s}
+.btn:hover{opacity:.85}
+.btn-primary{background:#6366f1;color:white}
+.btn-secondary{background:#334155;color:#e2e8f0}
+.btn-danger{background:#dc2626;color:white}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px;border-radius:4px}
+
+/* Modal */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;justify-content:center;align-items:center}
+.modal.open{display:flex}
+.modal-box{background:#1e293b;border-radius:12px;padding:24px;width:100%;max-width:440px;border:1px solid #334155}
+.modal-box h2{font-size:16px;font-weight:700;margin-bottom:16px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:12px;color:#94a3b8;margin-bottom:6px}
+.form-group input,.form-group select{width:100%}
+.form-row{display:flex;gap:8px}
+.auth-error{color:#ef4444;font-size:12px;margin-top:8px;display:none}
+
+/* Muchaku modal */
+.muchaku-modal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:16px}
+.muchaku-modal-item{display:flex;align-items:center;justify-content:space-between;background:#0f172a;border-radius:6px;padding:8px 12px}
+.muchaku-modal-item .ml{font-size:12px;color:#94a3b8}
+.muchaku-modal-item input{width:56px;text-align:center}
+.muchaku-modal-total{text-align:right;font-size:13px;color:#94a3b8;margin-bottom:12px}
+
+/* Save indicator */
+#saveIndicator{position:fixed;bottom:20px;right:20px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 16px;font-size:12px;display:none;z-index:500;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+#saveIndicator.show{display:block}
+#saveIndicator.saved{border-color:#22c55e;color:#22c55e}
+#saveIndicator.saving{border-color:#eab308;color:#eab308}
+#saveIndicator.error{border-color:#ef4444;color:#ef4444}
+
+/* Charts */
+.charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.chart-card{background:#0f172a;border-radius:10px;padding:14px;border:1px solid #334155}
+.chart-card h4{font-size:12px;color:#94a3b8;margin-bottom:10px}
+.chart-svg{width:100%;height:100px}
+
+/* Seasonal banner */
+.seasonal-top{height:4px;position:fixed;top:0;left:0;right:0;z-index:9999}
+.season-1 .seasonal-top{background:linear-gradient(90deg,#60a5fa,#e0f2fe,#60a5fa)}
+.season-2 .seasonal-top{background:linear-gradient(90deg,#f472b6,#fce7f3,#f472b6)}
+.season-3 .seasonal-top{background:linear-gradient(90deg,#86efac,#fef3c7,#86efac)}
+.season-4 .seasonal-top{background:linear-gradient(90deg,#fbcfe8,#fce7f3,#fbcfe8)}
+.season-5 .seasonal-top{background:linear-gradient(90deg,#86efac,#bbf7d0,#86efac)}
+.season-6 .seasonal-top{background:linear-gradient(90deg,#93c5fd,#c7d2fe,#93c5fd)}
+.season-7 .seasonal-top{background:linear-gradient(90deg,#38bdf8,#67e8f9,#38bdf8)}
+.season-8 .seasonal-top{background:linear-gradient(90deg,#c084fc,#fbbf24,#c084fc)}
+.season-9 .seasonal-top{background:linear-gradient(90deg,#fb923c,#fcd34d,#fb923c)}
+.season-10 .seasonal-top{background:linear-gradient(90deg,#f97316,#a855f7,#f97316)}
+.season-11 .seasonal-top{background:linear-gradient(90deg,#f59e0b,#dc2626,#f59e0b)}
+.season-12 .seasonal-top{background:linear-gradient(90deg,#ef4444,#22c55e,#ef4444)}
+
+.top-action-bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:#334155;color:#94a3b8}
+.divider{height:1px;background:#334155;margin:14px 0}
+</style>
+</head>
+<body>
+<div class="seasonal-top"></div>
+
+<!-- Auth Modal -->
+<div class="modal open" id="authModal">
+  <div class="modal-box">
+    <h2 id="authTitle">ログイン</h2>
+    <div id="loginForm">
+      <div class="form-group"><label>メールアドレス</label><input type="email" id="loginEmail" placeholder="example@email.com"></div>
+      <div class="form-group"><label>パスワード</label><input type="password" id="loginPassword" placeholder="パスワード"></div>
+      <div class="auth-error" id="loginError"></div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" style="flex:1" onclick="doLogin()">ログイン</button>
+        <button class="btn btn-secondary" onclick="showSignup()">新規登録</button>
+      </div>
+    </div>
+    <div id="signupForm" style="display:none">
+      <div class="form-group"><label>メールアドレス</label><input type="email" id="signupEmail" placeholder="example@email.com"></div>
+      <div class="form-group"><label>パスワード（6文字以上）</label><input type="password" id="signupPassword"></div>
+      <div class="auth-error" id="signupError"></div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" style="flex:1" onclick="doSignup()">登録する</button>
+        <button class="btn btn-secondary" onclick="showLogin()">戻る</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="mainApp" style="display:none">
+<div class="container">
+  <header>
+    <h1>パーソナル施策ツール v2</h1>
+    <div class="header-right">
+      <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncText">接続中...</span></div>
+      <div class="period-toggle">
+        <button class="period-btn active" id="btnWeek" onclick="setPeriod('week')">週</button>
+        <button class="period-btn" id="btnMonth" onclick="setPeriod('month')">月</button>
+      </div>
+      <div class="week-nav-wrap" id="weekNav">
+        <button onclick="prevPeriod()">◀</button>
+        <span id="periodLabel">読み込み中...</span>
+        <button onclick="nextPeriod()">▶</button>
+      </div>
+      <select class="member-sel" id="memberSelect" onchange="onMemberChange()">
+        <option value="all">全員</option>
+      </select>
+      <button class="header-btn" onclick="doLogout()">ログアウト</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="summary" onclick="switchTab('summary')">サマリー</button>
+    <button class="tab" data-tab="daily" onclick="switchTab('daily')">日別数字</button>
+    <button class="tab" data-tab="review" onclick="switchTab('review')">施策シート</button>
+    <button class="tab" data-tab="nippo" onclick="switchTab('nippo')">日報</button>
+    <button class="tab" data-tab="instagram" onclick="switchTab('instagram')">インスタ</button>
+    <button class="tab" data-tab="settings" onclick="switchTab('settings')">設定</button>
+  </div>
+
+  <!-- ===== SUMMARY TAB ===== -->
+  <div id="tab-summary" class="tab-content active">
+    <div class="summary-grid" id="summaryKpiGrid"></div>
+    <div class="card"><h2>転換率・確認指標</h2><div class="kpi-row" id="kpiRateRow"></div></div>
+    <div class="charts-grid" id="chartsGrid" style="margin-bottom:16px"></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:16px">
+      <div class="card" style="margin-bottom:0">
+        <div class="section-header">
+          <h2>残案件 <span class="badge" id="casesBadge">0件</span></h2>
+          <button class="btn btn-primary btn-sm" onclick="addCase()">+ 追加</button>
+        </div>
+        <div id="caseList"></div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="section-header">
+          <h2>動員キャンセル <span class="badge" id="cancelsBadge">0件</span></h2>
+          <button class="btn btn-primary btn-sm" onclick="addCancel()">+ 追加</button>
+        </div>
+        <div id="cancelList"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-header">
+        <h2>動員後無着地 <span class="badge" id="doinMuchakuBadge"></span></h2>
+        <button class="btn btn-primary btn-sm" onclick="addDoinMuchaku()">+ 追加</button>
+      </div>
+      <div id="doinMuchakuList"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+      <div class="card" style="margin-bottom:0">
+        <h2>無着地内訳 <span class="badge" id="muchakuTotalBadge">0件</span></h2>
+        <div id="muchakuBreakdown" class="reason-grid"></div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <h2>NG理由内訳 <span class="badge" id="ngTotalBadge">0件</span></h2>
+        <div id="ngBreakdown" class="reason-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== DAILY TAB ===== -->
+  <div id="tab-daily" class="tab-content">
+    <div class="card">
+      <div class="daily-wrap"><div id="dailyTableWrap"></div></div>
+    </div>
+  </div>
+
+  <!-- ===== REVIEW TAB ===== -->
+  <div id="tab-review" class="tab-content">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <div class="card">
+          <h2>今週の課題・原因</h2>
+          <div class="issue-box red">
+            <label>最大の課題</label>
+            <input type="text" id="mainIssue" placeholder="例: 動員直クロ獲得の達成率が25%と低い" oninput="saveReview()">
+          </div>
+          <div class="issue-box yellow">
+            <label>根本原因</label>
+            <input type="text" id="mainCause" placeholder="例: テスクロ率40%、オファー率9%と低い" oninput="saveReview()">
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-header"><h2>原因別アクション</h2></div>
+          <div id="causeActionsWrap"></div>
+        </div>
+        <div class="card">
+          <h2>最重要施策（今週やること）</h2>
+          <textarea id="topReasonAction" rows="4" placeholder="具体的な施策を記入..." style="width:100%" oninput="saveReview()"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>無着地内訳</h2>
+          <div id="reviewMuchakuGrid" class="reason-grid"></div>
+          <div style="margin-top:12px">
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:6px">その他メモ</label>
+            <textarea id="muchakuOther" rows="2" style="width:100%;font-size:13px" oninput="saveReview()"></textarea>
+          </div>
+        </div>
+        <div class="card">
+          <h2>NG理由内訳</h2>
+          <div id="reviewNgGrid" class="reason-grid"></div>
+        </div>
+        <div class="card">
+          <h2>メンバー別施策シート</h2>
+          <div id="memberReviewSummary"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== NIPPO TAB ===== -->
+  <div id="tab-nippo" class="tab-content">
+    <div class="card">
+      <div class="nippo-grid" id="nippoGrid"></div>
+    </div>
+  </div>
+
+  <!-- ===== INSTAGRAM TAB ===== -->
+  <div id="tab-instagram" class="tab-content">
+    <div class="card">
+      <div class="section-header">
+        <h2>アカウント別日別数字</h2>
+        <select id="igAccountSelect" onchange="renderInstagram()" style="padding:6px 12px;font-size:13px">
+          <option value="all">全アカウント</option>
+        </select>
+      </div>
+      <div class="ig-table-wrap"><div id="igTableWrap"></div></div>
+    </div>
+    <div class="card">
+      <div class="section-header"><h2>KPI</h2></div>
+      <div class="kpi-row" id="igKpiRow"></div>
+    </div>
+  </div>
+
+  <!-- ===== SETTINGS TAB ===== -->
+  <div id="tab-settings" class="tab-content">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px">
+      <div class="card">
+        <h2>週次目標</h2>
+        <div class="settings-grid" id="budgetGoalGrid"></div>
+      </div>
+      <div class="card">
+        <h2>月次目標</h2>
+        <div class="settings-grid" id="monthlyGoalGrid"></div>
+      </div>
+      <div class="card">
+        <h2>Instagramゴール</h2>
+        <div class="settings-grid" id="igGoalGrid"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-header">
+        <h2>メンバー管理</h2>
+        <button class="btn btn-primary btn-sm" onclick="openAddMember()">+ メンバー追加</button>
+      </div>
+      <div id="memberListWrap"></div>
+    </div>
+    <div class="card">
+      <div class="section-header">
+        <h2>Instagramアカウント管理</h2>
+        <button class="btn btn-primary btn-sm" onclick="openAddAccount()">+ アカウント追加</button>
+      </div>
+      <div id="accountListWrap"></div>
+    </div>
+    <div class="card">
+      <h2>データ管理</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="exportData()">📁 エクスポート（JSON）</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">📂 インポート</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+      </div>
+      <div style="margin-top:12px;padding:12px;background:#0f172a;border-radius:8px;font-size:12px;color:#64748b" id="firebaseStatus">Firebase: 接続中...</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Add Member Modal -->
+<div class="modal" id="addMemberModal">
+  <div class="modal-box">
+    <h2 id="addMemberTitle">メンバー追加</h2>
+    <div class="form-group"><label>名前</label><input type="text" id="newMemberName" placeholder="例: 田中太郎"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveMember()">保存</button>
+      <button class="btn btn-secondary" onclick="closeModal('addMemberModal')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Account Modal -->
+<div class="modal" id="addAccountModal">
+  <div class="modal-box">
+    <h2>Instagramアカウント追加</h2>
+    <div class="form-group"><label>アカウント名</label><input type="text" id="newAccountName" placeholder="例: ゆるイヌ温泉"></div>
+    <div class="form-group"><label>URL</label><input type="text" id="newAccountUrl" placeholder="https://instagram.com/..."></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveAccount()">保存</button>
+      <button class="btn btn-secondary" onclick="closeModal('addAccountModal')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Muchaku Reason Modal -->
+<div class="modal" id="muchakuModal">
+  <div class="modal-box" style="max-width:520px">
+    <h2 id="muchakuModalTitle">無着地理由入力</h2>
+    <div class="muchaku-modal-grid" id="muchakuModalGrid"></div>
+    <div class="muchaku-modal-total">合計: <strong id="muchakuModalTotal">0</strong>件</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveMuchakuModal()">保存</button>
+      <button class="btn btn-secondary" onclick="closeModal('muchakuModal')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- NG Reason Modal -->
+<div class="modal" id="ngModal">
+  <div class="modal-box" style="max-width:480px">
+    <h2 id="ngModalTitle">NG理由入力</h2>
+    <div class="muchaku-modal-grid" id="ngModalGrid"></div>
+    <div class="muchaku-modal-total">合計: <strong id="ngModalTotal">0</strong>件</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveNgModal()">保存</button>
+      <button class="btn btn-secondary" onclick="closeModal('ngModal')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Save Indicator -->
+<div id="saveIndicator"></div>
+
+<script>
+// ============================================================
+// 定数
+// ============================================================
+const STORAGE_KEY = 'salesPro_personal';
+const DAY_LABELS = ['月','火','水','木','金','土','日'];
+
+const METRICS = [
+  { cat: '投稿', items: [{ key: 'post', label: '投稿数' }] },
+  { cat: 'LINE', items: [{ key: 'lineExchange', label: 'LINE交換' }] },
+  { cat: 'アポ', items: [
+    { key: 'apoGet', label: '獲得' },
+    { key: 'apoExec', label: '実施数' },
+    { key: 'apoCxl', label: 'CXL' },
+    { key: 'testClose', label: 'テスクロ' },
+    { key: 'offer', label: 'オファー' },
+    { key: 'ng', label: 'NG' },
+    { key: 'muchaku', label: '無着地' }
+  ]},
+  { cat: '動員', items: [
+    { key: 'doinGet', label: '動員獲得' },
+    { key: 'doinGetCxl', label: '獲得後CXL' },
+    { key: 'doinExec', label: '動員実施' },
+    { key: 'doinExecCxl', label: '実施後CXL' }
+  ]},
+  { cat: '面談', items: [
+    { key: 'mendanGet', label: '面談獲得' },
+    { key: 'mendanGetCxl', label: '獲得後CXL' },
+    { key: 'mendanExec', label: '面談実施' },
+    { key: 'mendanExecCxl', label: '実施後CXL' }
+  ]},
+  { cat: '成約', items: [
+    { key: 'seiyaku', label: '成約' },
+    { key: 'coolingOff', label: 'クーリングオフ' }
+  ]}
+];
+
+const SUMMARY_METRICS = [
+  { key: 'post', label: '投稿数', goalKey: 'post' },
+  { key: 'apoGet', label: 'アポ獲得', goalKey: 'apoGet' },
+  { key: 'apoExec', label: 'アポ実施', goalKey: 'apoExec' },
+  { key: 'doinGet', label: '動員直クロ獲得', goalKey: 'doinGet' },
+  { key: 'doinExec', label: '動員直クロ実施', goalKey: 'doinExec' },
+  { key: 'mendanGet', label: '面談獲得', goalKey: 'mendanGet' },
+  { key: 'mendanExec', label: '面談実施', goalKey: 'mendanExec' },
+  { key: 'seiyaku', label: '成約', goalKey: 'seiyaku' }
+];
+
+const MUCHAKU_REASONS = ['こだわりが強い','横槍','勧誘ブロック','不安が強い','今じゃない','完全副業ニーズ','その他'];
+const NG_REASONS = ['金策NG','既婚NG','職業NG','スタンスNG','精神NG'];
+
+const IG_METRICS = [
+  { key: 'follow', label: 'フォロー' },
+  { key: 'follower', label: 'フォロワー' },
+  { key: 'dmSend', label: 'DM送信' },
+  { key: 'dmReply', label: 'DM返信' },
+  { key: 'igOffer', label: 'オファー' },
+  { key: 'igApoGet', label: 'アポ獲得' },
+  { key: 'igApoExec', label: 'アポ実施' },
+  { key: 'igDoinExec', label: '動員実施' },
+  { key: 'igSeiyaku', label: '成約' }
+];
+
+const DEFAULT_BUDGET = { post:56, apoGet:50, apoExec:46, doinGet:7, doinExec:4, mendanGet:2, mendanExec:2, seiyaku:1 };
+const DEFAULT_MONTHLY = { post:56, apoGet:50, apoExec:46, doinGet:7, doinExec:4, mendanGet:2, mendanExec:2, seiyaku:1 };
+const DEFAULT_IG_GOALS = { send:0, reply:0, offer:0, apoGet:0, apoExec:0, doinExec:0, seiyaku:0 };
+
+// ============================================================
+// 状態
+// ============================================================
+const now = new Date();
+let currentYear = now.getFullYear();
+let currentMonth = now.getMonth() + 1;
+let currentWeekNum = calcWeekNum(now);
+let viewPeriod = 'week';
+let selectedMember = 'all';
+let editingMemberId = null;
+
+// データ
+let data = getDefaultData();
+
+// Firebase同期制御（これがデータ保存バグの根本修正）
+let lastLocalEditMs = 0;  // ユーザーが最後に編集した時刻
+let fbListenerActive = false;
+let saveTimer = null;
+let isFbSaving = false;
+
+function getDefaultData() {
+  return {
+    members: [],
+    accounts: [],
+    settings: {
+      budget: { ...DEFAULT_BUDGET },
+      monthly: { ...DEFAULT_MONTHLY },
+      igGoals: { ...DEFAULT_IG_GOALS }
+    },
+    weeks: {},
+    monthlyData: {},
+    lastUpdated: 0,
+    deletedMembers: []
+  };
+}
+
+// ============================================================
+// 週計算
+// ============================================================
+function calcWeekNum(date) {
+  const y = date.getFullYear(), m = date.getMonth() + 1;
+  const firstDay = new Date(y, m - 1, 1).getDay();
+  const adj = firstDay === 0 ? 6 : firstDay - 1;
+  return Math.ceil((date.getDate() + adj) / 7);
+}
+
+function getWeekKey() { return `${currentYear}-${currentMonth}-W${currentWeekNum}`; }
+function getMonthKey() { return `${currentYear}-${currentMonth}`; }
+
+function getWeekDates() {
+  const firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
+  const adj = firstDay === 0 ? 6 : firstDay - 1;
+  const startDate = 1 + (currentWeekNum - 1) * 7 - adj;
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(currentYear, currentMonth - 1, startDate + i);
+    dates.push(d);
+  }
+  return dates;
+}
+
+function getMaxWeekNum(y, m) {
+  const lastDay = new Date(y, m, 0).getDate();
+  const firstDay = new Date(y, m - 1, 1).getDay();
+  const adj = firstDay === 0 ? 6 : firstDay - 1;
+  return Math.ceil((lastDay + adj) / 7);
+}
+
+function getPeriodLabel() {
+  if (viewPeriod === 'week') {
+    const dates = getWeekDates();
+    const s = dates[0], e = dates[6];
+    const ms = (s.getMonth() + 1) + '/' + s.getDate();
+    const me = (e.getMonth() + 1) + '/' + e.getDate();
+    return `${ms}〜${me}（第${currentWeekNum}週）`;
+  } else {
+    return `${currentYear}年${currentMonth}月`;
+  }
+}
+
+// ============================================================
+// データアクセス
+// ============================================================
+function getWeekData() {
+  const k = getWeekKey();
+  if (!data.weeks[k]) {
+    data.weeks[k] = {
+      daily: {},
+      review: createEmptyReview(),
+      memberReview: {},
+      nippo: {},
+      instagram: {}
+    };
+  }
+  const w = data.weeks[k];
+  if (!w.review) w.review = createEmptyReview();
+  if (!w.memberReview) w.memberReview = {};
+  if (!w.nippo) w.nippo = {};
+  if (!w.instagram) w.instagram = {};
+  if (!w.review.doinMuchakuList) w.review.doinMuchakuList = [];
+  if (!w.review.cases) w.review.cases = [];
+  if (!w.review.cancels) w.review.cancels = [];
+  if (!w.review.muchakuReasons) w.review.muchakuReasons = {};
+  if (!w.review.ngReasons) w.review.ngReasons = {};
+  return w;
+}
+
+function createEmptyReview() {
+  return {
+    mainIssue: '', mainCause: '', topReasonAction: '',
+    causeActions: Array(5).fill(null).map(() => ({ cause: '', actions: [] })),
+    muchakuReasons: {}, ngReasons: {}, muchakuOther: '',
+    doinMuchakuList: [], cases: [], cancels: []
+  };
+}
+
+function getMemberDaily(memberId) {
+  const w = getWeekData();
+  if (!w.daily[memberId]) {
+    w.daily[memberId] = {};
+    METRICS.forEach(cat => cat.items.forEach(m => {
+      w.daily[memberId][m.key] = [0,0,0,0,0,0,0];
+    }));
+  }
+  const d = w.daily[memberId];
+  METRICS.forEach(cat => cat.items.forEach(m => {
+    if (!Array.isArray(d[m.key])) d[m.key] = [0,0,0,0,0,0,0];
+  }));
+  return d;
+}
+
+function getMonthDayData() {
+  const k = getMonthKey();
+  if (!data.monthlyData) data.monthlyData = {};
+  if (!data.monthlyData[k]) data.monthlyData[k] = {};
+  return data.monthlyData[k];
+}
+
+function getMonthDayMemberData(memberId) {
+  const d = getMonthDayData();
+  if (!d[memberId]) {
+    d[memberId] = {};
+    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+    METRICS.forEach(cat => cat.items.forEach(m => {
+      d[memberId][m.key] = Array(daysInMonth).fill(0);
+    }));
+  }
+  return d[memberId];
+}
+
+function safeArr(val, len) {
+  if (Array.isArray(val)) return val;
+  if (val && typeof val === 'object') return Object.values(val).slice(0, len);
+  return Array(len).fill(0);
+}
+
+function arrSum(arr) {
+  return safeArr(arr, 7).reduce((a, b) => a + (parseInt(b) || 0), 0);
+}
+
+function getMembers() {
+  if (!data.members) data.members = [];
+  if (!Array.isArray(data.members)) data.members = Object.values(data.members);
+  return data.members;
+}
+
+function getAccounts() {
+  if (!data.accounts) data.accounts = [];
+  if (!Array.isArray(data.accounts)) data.accounts = Object.values(data.accounts);
+  return data.accounts;
+}
+
+function getActiveMembers() {
+  return getMembers().filter(m => !m.deleted);
+}
+
+// ============================================================
+// データ保存（バグ修正の核心）
+// ============================================================
+function saveData() {
+  // ローカル編集時刻を更新（Firebaseリスナーへの上書き防止に使用）
+  lastLocalEditMs = Date.now();
+  data.lastUpdated = lastLocalEditMs;
+
+  // localStorage に即時保存
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch(e) {
+    console.error('localStorage保存エラー:', e);
+  }
+
+  // Firebase に遅延保存（デバウンス1.5秒）
+  showSaveIndicator('saving');
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(doFirebaseSave, 1500);
+}
+
+function doFirebaseSave() {
+  if (!auth.currentUser) return;
+  isFbSaving = true;
+  setSyncStatus('saving');
+  const payload = JSON.parse(JSON.stringify(data));
+  payload.lastUpdated = Date.now();
+  db.ref(TEAM_PATH).set(payload)
+    .then(() => {
+      isFbSaving = false;
+      setSyncStatus('ok');
+      showSaveIndicator('saved');
+    })
+    .catch(err => {
+      isFbSaving = false;
+      setSyncStatus('error');
+      showSaveIndicator('error');
+      console.error('Firebase保存エラー:', err);
+    });
+}
+
+function loadFromLocalStorage() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) {
+      data = JSON.parse(s);
+      normalizeData();
+    }
+  } catch(e) {
+    console.error('localStorage読み込みエラー:', e);
+    data = getDefaultData();
+  }
+}
+
+function normalizeData() {
+  if (!data.members) data.members = [];
+  if (!Array.isArray(data.members)) data.members = Object.values(data.members);
+  if (!data.accounts) data.accounts = [];
+  if (!Array.isArray(data.accounts)) data.accounts = Object.values(data.accounts);
+  if (!data.settings) data.settings = {};
+  if (!data.settings.budget) data.settings.budget = { ...DEFAULT_BUDGET };
+  if (!data.settings.monthly) data.settings.monthly = { ...DEFAULT_MONTHLY };
+  if (!data.settings.igGoals) data.settings.igGoals = { ...DEFAULT_IG_GOALS };
+  if (!data.weeks) data.weeks = {};
+  if (!data.monthlyData) data.monthlyData = {};
+  if (!data.deletedMembers) data.deletedMembers = [];
+  if (!data.lastUpdated) data.lastUpdated = 0;
+}
+
+// ============================================================
+// Firebase リスナー（データ上書きバグの修正箇所）
+// ============================================================
+function setupFirebaseListener() {
+  if (fbListenerActive) return;
+  fbListenerActive = true;
+
+  db.ref(TEAM_PATH).on('value', snapshot => {
+    const fbData = snapshot.val();
+    if (!fbData) return;
+
+    // 【核心の修正】自分の保存中はスキップ
+    if (isFbSaving) return;
+
+    // 【核心の修正】ユーザーが最近（10秒以内）編集 AND ローカルが新しい場合はスキップ
+    const localIsNewer = data.lastUpdated && fbData.lastUpdated && data.lastUpdated > fbData.lastUpdated;
+    const editedRecently = Date.now() - lastLocalEditMs < 10000;
+    if (localIsNewer && editedRecently) {
+      console.log('Firebase sync skipped: local data is newer and user is editing');
+      return;
+    }
+
+    // Firebaseデータを適用
+    const prevFocusId = document.activeElement?.id;
+    const prevFocusValue = document.activeElement?.value;
+
+    data = fbData;
+    normalizeData();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    setSyncStatus('ok');
+
+    // 表示を更新
+    renderAll();
+
+    // フォーカスしていた入力欄を復元（最重要：入力中に画面が更新されても入力が消えない）
+    if (prevFocusId) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(prevFocusId);
+        if (el) {
+          el.focus();
+          if (el.value !== prevFocusValue && prevFocusValue !== undefined) {
+            el.value = prevFocusValue;
+          }
+        }
+      });
+    }
+  });
+}
+
+// ============================================================
+// 認証
+// ============================================================
+function doLogin() {
+  const email = document.getElementById('loginEmail').value;
+  const pw = document.getElementById('loginPassword').value;
+  const err = document.getElementById('loginError');
+  err.style.display = 'none';
+  auth.signInWithEmailAndPassword(email, pw).catch(e => {
+    err.textContent = e.code === 'auth/user-not-found' ? 'アカウントが見つかりません' :
+      e.code === 'auth/wrong-password' ? 'パスワードが間違っています' : e.message;
+    err.style.display = 'block';
+  });
+}
+
+function doSignup() {
+  const email = document.getElementById('signupEmail').value;
+  const pw = document.getElementById('signupPassword').value;
+  const err = document.getElementById('signupError');
+  err.style.display = 'none';
+  if (pw.length < 6) { err.textContent = 'パスワードは6文字以上必要です'; err.style.display = 'block'; return; }
+  auth.createUserWithEmailAndPassword(email, pw).catch(e => {
+    err.textContent = e.message; err.style.display = 'block';
+  });
+}
+
+function doLogout() { auth.signOut(); }
+function showLogin() { document.getElementById('loginForm').style.display = ''; document.getElementById('signupForm').style.display = 'none'; document.getElementById('authTitle').textContent = 'ログイン'; }
+function showSignup() { document.getElementById('loginForm').style.display = 'none'; document.getElementById('signupForm').style.display = ''; document.getElementById('authTitle').textContent = '新規登録'; }
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    document.getElementById('authModal').classList.remove('open');
+    document.getElementById('mainApp').style.display = '';
+    loadFromLocalStorage();
+    setupFirebaseListener();
+    db.ref(TEAM_PATH).once('value').then(snap => {
+      const fbData = snap.val();
+      if (fbData) {
+        if (!data.lastUpdated || fbData.lastUpdated > data.lastUpdated) {
+          data = fbData;
+          normalizeData();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+      }
+      initApp();
+    });
+  } else {
+    document.getElementById('authModal').classList.add('open');
+    document.getElementById('mainApp').style.display = 'none';
+  }
+});
+
+// ============================================================
+// 初期化
+// ============================================================
+function initApp() {
+  applySeasonalStyle();
+  updatePeriodLabel();
+  renderMemberSelect();
+  renderAll();
+}
+
+function applySeasonalStyle() {
+  document.body.className = `season-${currentMonth}`;
+}
+
+// ============================================================
+// ナビゲーション
+// ============================================================
+function setPeriod(p) {
+  viewPeriod = p;
+  document.getElementById('btnWeek').className = 'period-btn' + (p === 'week' ? ' active' : '');
+  document.getElementById('btnMonth').className = 'period-btn' + (p === 'month' ? ' active' : '');
+  updatePeriodLabel();
+  renderAll();
+}
+
+function prevPeriod() {
+  if (viewPeriod === 'week') {
+    currentWeekNum--;
+    if (currentWeekNum < 1) {
+      currentMonth--;
+      if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+      currentWeekNum = getMaxWeekNum(currentYear, currentMonth);
+    }
+  } else {
+    currentMonth--;
+    if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+  }
+  updatePeriodLabel();
+  applySeasonalStyle();
+  renderAll();
+}
+
+function nextPeriod() {
+  if (viewPeriod === 'week') {
+    const max = getMaxWeekNum(currentYear, currentMonth);
+    currentWeekNum++;
+    if (currentWeekNum > max) {
+      currentWeekNum = 1;
+      currentMonth++;
+      if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+    }
+  } else {
+    currentMonth++;
+    if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  }
+  updatePeriodLabel();
+  applySeasonalStyle();
+  renderAll();
+}
+
+function updatePeriodLabel() {
+  document.getElementById('periodLabel').textContent = getPeriodLabel();
+}
+
+function onMemberChange() {
+  selectedMember = document.getElementById('memberSelect').value;
+  renderAll();
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === id));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + id));
+}
+
+// ============================================================
+// 全体レンダリング（フォーカス保護付き）
+// ============================================================
+function renderAll() {
+  // フォーカス中の要素とその値を記憶（Firebase sync後に完全復元するため）
+  const focusedEl = document.activeElement;
+  const focusedId = focusedEl?.id;
+  const focusedValue = (focusedEl && (focusedEl.tagName === 'INPUT' || focusedEl.tagName === 'TEXTAREA'))
+    ? focusedEl.value : undefined;
+
+  renderMemberSelect();
+  renderSummary();
+  renderDaily();
+  renderReview();
+  renderNippo();
+  renderInstagram();
+  renderSettings();
+
+  // フォーカスと入力値を復元（最重要: ユーザーが入力中でも値が消えない）
+  if (focusedId) {
+    requestAnimationFrame(() => {
+      const el = document.getElementById(focusedId);
+      if (el) {
+        el.focus();
+        // ユーザーが入力中だった値を復元（dataからの再描画で上書きされた場合）
+        if (focusedValue !== undefined && el.value !== focusedValue) {
+          el.value = focusedValue;
+        }
+      }
+    });
+  }
+}
+
+// ============================================================
+// メンバーセレクト
+// ============================================================
+function renderMemberSelect() {
+  const sel = document.getElementById('memberSelect');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="all">全員</option>';
+  getActiveMembers().forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = m.name;
+    sel.appendChild(opt);
+  });
+  sel.value = prev;
+  if (!sel.value) sel.value = 'all';
+  selectedMember = sel.value;
+}
+
+// ============================================================
+// サマリー
+// ============================================================
+function calcTotals() {
+  const members = selectedMember === 'all' ? getActiveMembers() : getActiveMembers().filter(m => m.id === selectedMember);
+  const totals = {};
+  METRICS.forEach(cat => cat.items.forEach(m => { totals[m.key] = 0; }));
+
+  if (viewPeriod === 'week') {
+    members.forEach(member => {
+      const d = getMemberDaily(member.id);
+      METRICS.forEach(cat => cat.items.forEach(m => {
+        totals[m.key] += arrSum(d[m.key]);
+      }));
+    });
+  } else {
+    const monthData = getMonthDayData();
+    members.forEach(member => {
+      const md = monthData[member.id] || {};
+      METRICS.forEach(cat => cat.items.forEach(m => {
+        const arr = md[m.key] || [];
+        totals[m.key] += Array.isArray(arr) ? arr.reduce((a, b) => a + (parseInt(b)||0), 0) : 0;
+      }));
+    });
+  }
+  return totals;
+}
+
+function calcGoals() {
+  const members = selectedMember === 'all' ? getActiveMembers() : getActiveMembers().filter(m => m.id === selectedMember);
+  const g = viewPeriod === 'week' ? { ...data.settings.budget } : { ...data.settings.monthly };
+  if (members.length > 1) {
+    Object.keys(g).forEach(k => { g[k] = (g[k] || 0) * members.length; });
+  }
+  return g;
+}
+
+function calcDaysElapsed() {
+  if (viewPeriod === 'week') {
+    const dates = getWeekDates();
+    let count = 0;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    dates.forEach(d => { if (d <= today) count++; });
+    return { elapsed: count, total: 7 };
+  } else {
+    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+    const today = new Date();
+    if (today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth) {
+      return { elapsed: today.getDate(), total: daysInMonth };
+    } else if (today.getFullYear() * 12 + today.getMonth() + 1 > currentYear * 12 + currentMonth) {
+      return { elapsed: daysInMonth, total: daysInMonth };
+    } else {
+      return { elapsed: 0, total: daysInMonth };
+    }
+  }
+}
+
+function renderSummary() {
+  const t = calcTotals();
+  const g = calcGoals();
+  const { elapsed, total } = calcDaysElapsed();
+  const remaining = total - elapsed;
+
+  const grid = document.getElementById('summaryKpiGrid');
+  grid.innerHTML = SUMMARY_METRICS.map(sm => {
+    const actual = t[sm.key] || 0;
+    const goal = g[sm.goalKey] || 0;
+    const pctNum = goal > 0 ? Math.round(actual / goal * 100) : 0;
+    const pctStr = goal > 0 ? pctNum + '%' : '-';
+    const barClass = pctNum >= 100 ? 'good' : pctNum >= 70 ? 'warn' : 'danger';
+    const barW = Math.min(pctNum, 100);
+
+    let dailyHtml = '';
+    if (goal > 0 && remaining > 0) {
+      const paced = goal > 0 && elapsed > 0 ? Math.ceil((goal - actual) / remaining) : 0;
+      if (paced > 0) dailyHtml = `<div class="daily-need">残り${remaining}日 → 1日あたり${paced}必要</div>`;
+    }
+
+    return `<div class="kpi-card">
+      <h4>${sm.label}</h4>
+      <div class="val">${actual}</div>
+      <div class="sub">目標: ${goal}</div>
+      <div class="rate ${pctNum>=100?'c-green':pctNum>=70?'c-yellow':'c-red'}">${pctStr}</div>
+      <div class="progress-bar"><div class="progress-fill ${barClass}" style="width:${barW}%"></div></div>
+      ${dailyHtml}
+    </div>`;
+  }).join('');
+
+  // 転換率
+  const rateRow = document.getElementById('kpiRateRow');
+  const pct = (a,b) => b>0 ? Math.round(a/b*100)+'%' : '-';
+  rateRow.innerHTML = [
+    ['無着地率', pct(t.muchaku, t.apoExec)],
+    ['NG率', pct(t.ng, t.apoExec)],
+    ['テスクロ率', pct(t.testClose, t.apoExec)],
+    ['オファー率', pct(t.offer, t.apoExec)],
+    ['動員獲得率', pct(t.doinGet, t.apoExec)],
+    ['動員実施率', pct(t.doinExec, t.doinGet)],
+    ['成約率', pct(t.seiyaku, t.doinExec)]
+  ].map(([label, val]) => `<div class="kpi-item"><div class="label">${label}</div><div class="value">${val}</div></div>`).join('');
+
+  // 残案件・キャンセル・動員後無着地
+  renderCases();
+  renderMuchakuBreakdown();
+  renderNgBreakdown();
+
+  // チャート
+  renderCharts(t, g);
+}
+
+function renderCharts(t, g) {
+  const grid = document.getElementById('chartsGrid');
+  const chartMetrics = [
+    { key: 'apoGet', label: 'アポ獲得' },
+    { key: 'doinGet', label: '動員直クロ獲得' },
+    { key: 'seiyaku', label: '成約' }
+  ];
+
+  grid.innerHTML = chartMetrics.map(sm => {
+    const actual = t[sm.key] || 0;
+    const goal = g[sm.key] || 1;
+    const pct = Math.min(Math.round(actual / goal * 100), 100);
+    const { elapsed, total } = calcDaysElapsed();
+    const dailyGoal = goal / total;
+
+    // デイリーデータを取得してSVGラインチャートを作成
+    const chartData = getDailyChartData(sm.key);
+    const svgChart = createLineSVG(chartData, dailyGoal, total);
+
+    return `<div class="chart-card">
+      <h4>${sm.label}：${actual} / ${goal}（${pct}%）</h4>
+      ${svgChart}
+    </div>`;
+  }).join('');
+}
+
+function getDailyChartData(key) {
+  if (viewPeriod === 'week') {
+    const members = selectedMember === 'all' ? getActiveMembers() : getActiveMembers().filter(m => m.id === selectedMember);
+    const arr = Array(7).fill(0);
+    members.forEach(member => {
+      const d = getMemberDaily(member.id);
+      const vals = safeArr(d[key], 7);
+      vals.forEach((v, i) => { arr[i] += parseInt(v) || 0; });
+    });
+    return arr;
+  }
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+  const members = selectedMember === 'all' ? getActiveMembers() : getActiveMembers().filter(m => m.id === selectedMember);
+  const arr = Array(daysInMonth).fill(0);
+  const monthData = getMonthDayData();
+  members.forEach(member => {
+    const md = monthData[member.id] || {};
+    const vals = md[key] || [];
+    vals.forEach((v, i) => { if (i < daysInMonth) arr[i] += parseInt(v) || 0; });
+  });
+  return arr;
+}
+
+function createLineSVG(data, dailyGoal, total) {
+  const w = 260, h = 80, pad = 10;
+  const maxVal = Math.max(...data, dailyGoal * total / data.length * 1.2, 1);
+  const pts = data.map((v, i) => {
+    const x = pad + (w - pad * 2) * i / (data.length - 1 || 1);
+    const y = h - pad - (h - pad * 2) * v / maxVal;
+    return `${x},${y}`;
+  }).join(' ');
+
+  // 目標ライン
+  const tgY = h - pad - (h - pad * 2) * dailyGoal / maxVal;
+  const targetPts = data.map((_, i) => {
+    const x = pad + (w - pad * 2) * i / (data.length - 1 || 1);
+    const ty = h - pad - (h - pad * 2) * (dailyGoal * (i + 1)) / maxVal;
+    return `${x},${Math.max(pad, ty)}`;
+  }).join(' ');
+
+  return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+    <polyline points="${targetPts}" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="4,4"/>
+    <polyline points="${pts}" fill="none" stroke="#6366f1" stroke-width="2"/>
+    ${data.map((v, i) => {
+      const x = pad + (w - pad * 2) * i / (data.length - 1 || 1);
+      const y = h - pad - (h - pad * 2) * v / maxVal;
+      return `<circle cx="${x}" cy="${y}" r="3" fill="#6366f1"/>`;
+    }).join('')}
+  </svg>`;
+}
+
+// ============================================================
+// 残案件・キャンセル・動員後無着地
+// ============================================================
+function renderCases() {
+  const w = getWeekData();
+  const cases = w.review.cases || [];
+  const cancels = w.review.cancels || [];
+  const doinMuchaku = w.review.doinMuchakuList || [];
+
+  document.getElementById('casesBadge').textContent = cases.length + '件';
+  document.getElementById('cancelsBadge').textContent = cancels.length + '件';
+  document.getElementById('doinMuchakuBadge').textContent = doinMuchaku.length + '件';
+
+  // 残案件
+  document.getElementById('caseList').innerHTML = cases.map((c, i) =>
+    `<div class="case-item">
+      <input value="${esc(c.name||'')}" placeholder="顧客名" oninput="updateCase(${i},'name',this.value)">
+      <input value="${esc(c.status||'')}" placeholder="ステータス" oninput="updateCase(${i},'status',this.value)">
+      <button class="del-btn" onclick="removeCase(${i})">×</button>
+    </div>`
+  ).join('') || '<div style="color:#64748b;font-size:12px;padding:8px">案件なし</div>';
+
+  // キャンセル
+  document.getElementById('cancelList').innerHTML = cancels.map((c, i) =>
+    `<div class="case-item">
+      <input value="${esc(c.name||'')}" placeholder="顧客名" oninput="updateCancel(${i},'name',this.value)">
+      <input value="${esc(c.reason||'')}" placeholder="キャンセル理由" oninput="updateCancel(${i},'reason',this.value)">
+      <button class="del-btn" onclick="removeCancel(${i})">×</button>
+    </div>`
+  ).join('') || '<div style="color:#64748b;font-size:12px;padding:8px">キャンセルなし</div>';
+
+  // 動員後無着地
+  document.getElementById('doinMuchakuList').innerHTML = doinMuchaku.map((d, i) =>
+    `<div class="case-item" style="grid-template-columns:1fr 1fr 1fr auto">
+      <input value="${esc(d.name||'')}" placeholder="顧客名" oninput="updateDoinMuchaku(${i},'name',this.value)">
+      <input value="${esc(d.date||'')}" placeholder="日程" oninput="updateDoinMuchaku(${i},'date',this.value)">
+      <input value="${esc(d.reason||'')}" placeholder="理由" oninput="updateDoinMuchaku(${i},'reason',this.value)">
+      <button class="del-btn" onclick="removeDoinMuchaku(${i})">×</button>
+    </div>`
+  ).join('') || '<div style="color:#64748b;font-size:12px;padding:8px">無着地なし</div>';
+}
+
+function addCase() { const w=getWeekData(); if(!w.review.cases)w.review.cases=[]; w.review.cases.push({name:'',status:''}); saveData(); renderCases(); }
+function addCancel() { const w=getWeekData(); if(!w.review.cancels)w.review.cancels=[]; w.review.cancels.push({name:'',reason:''}); saveData(); renderCases(); }
+function addDoinMuchaku() { const w=getWeekData(); if(!w.review.doinMuchakuList)w.review.doinMuchakuList=[]; w.review.doinMuchakuList.push({name:'',date:'',reason:''}); saveData(); renderCases(); }
+function updateCase(i,k,v){ const w=getWeekData(); w.review.cases[i][k]=v; saveData(); }
+function updateCancel(i,k,v){ const w=getWeekData(); w.review.cancels[i][k]=v; saveData(); }
+function updateDoinMuchaku(i,k,v){ const w=getWeekData(); w.review.doinMuchakuList[i][k]=v; saveData(); }
+function removeCase(i){ const w=getWeekData(); w.review.cases.splice(i,1); saveData(); renderCases(); }
+function removeCancel(i){ const w=getWeekData(); w.review.cancels.splice(i,1); saveData(); renderCases(); }
+function removeDoinMuchaku(i){ const w=getWeekData(); w.review.doinMuchakuList.splice(i,1); saveData(); renderCases(); }
+
+// ============================================================
+// 無着地・NG内訳
+// ============================================================
+function renderMuchakuBreakdown() {
+  const w = getWeekData();
+  const reasons = w.review.muchakuReasons || {};
+  const total = MUCHAKU_REASONS.reduce((a,_,i) => a + (parseInt(reasons[i])||0), 0);
+  document.getElementById('muchakuTotalBadge').textContent = total + '件';
+  document.getElementById('muchakuBreakdown').innerHTML = MUCHAKU_REASONS.map((label, i) => {
+    const v = parseInt(reasons[i]) || 0;
+    return `<div class="reason-item">
+      <span class="reason-label">${label}</span>
+      <span>${v > 0 ? `<span class="c-green">${v}</span>` : `<span class="c-gray">0</span>`}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderNgBreakdown() {
+  const w = getWeekData();
+  const reasons = w.review.ngReasons || {};
+  const total = NG_REASONS.reduce((a,_,i) => a + (parseInt(reasons[i])||0), 0);
+  document.getElementById('ngTotalBadge').textContent = total + '件';
+  document.getElementById('ngBreakdown').innerHTML = NG_REASONS.map((label, i) => {
+    const v = parseInt(reasons[i]) || 0;
+    return `<div class="reason-item">
+      <span class="reason-label">${label}</span>
+      <span>${v > 0 ? `<span class="c-red">${v}</span>` : `<span class="c-gray">0</span>`}</span>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// 日別入力
+// ============================================================
+function renderDaily() {
+  const wrap = document.getElementById('dailyTableWrap');
+  const members = selectedMember === 'all' ? getActiveMembers() : getActiveMembers().filter(m => m.id === selectedMember);
+
+  if (members.length === 0) {
+    wrap.innerHTML = '<div style="color:#64748b;padding:16px">メンバーがいません。設定タブからメンバーを追加してください。</div>';
+    return;
+  }
+
+  if (viewPeriod === 'week') {
+    renderWeeklyTable(wrap, members);
+  } else {
+    renderMonthlyTable(wrap, members);
+  }
+}
+
+function renderWeeklyTable(wrap, members) {
+  const dates = getWeekDates();
+  const dayHeaders = dates.map((d, i) => {
+    const dayLabel = DAY_LABELS[i];
+    const md = (d.getMonth()+1) + '/' + d.getDate();
+    return `<th>${md}<br><span style="font-size:10px">${dayLabel}</span></th>`;
+  }).join('');
+
+  let html = `<table class="daily-table">
+    <thead><tr>
+      <th class="label-col" style="min-width:90px">項目</th>
+      ${dayHeaders}
+      <th>合計</th>
+    </tr></thead><tbody>`;
+
+  members.forEach(member => {
+    const d = getMemberDaily(member.id);
+    if (members.length > 1) {
+      html += `<tr><td colspan="9" style="background:#1e293b;padding:8px 12px;font-weight:700;color:#6366f1;font-size:13px">👤 ${member.name}</td></tr>`;
+    }
+    METRICS.forEach(cat => {
+      html += `<tr><td class="cat-row" colspan="9">${cat.cat}</td></tr>`;
+      cat.items.forEach(m => {
+        const arr = safeArr(d[m.key], 7);
+        const total = arr.reduce((a, b) => a + (parseInt(b)||0), 0);
+        const cells = arr.map((v, i) => {
+          const id = `inp_${member.id}_${m.key}_${i}`;
+          return `<td><input type="number" class="num-input" id="${id}" value="${parseInt(v)||0}" min="0"
+            oninput="updateWeekDay('${member.id}','${m.key}',${i},this.value)"
+            onfocus="this.select()"></td>`;
+        }).join('');
+        html += `<tr><td class="label-col">${m.label}</td>${cells}<td class="total-col">${total}</td></tr>`;
+      });
+    });
+
+    // 無着地ボタン（アポ実施に対して）
+    html += `<tr><td class="label-col" style="color:#eab308">無着地理由</td>`;
+    dates.forEach((dt, i) => {
+      const hasReasons = hasMuchakuReason(member.id, i);
+      const dtLabel = (dt.getMonth()+1)+'/'+ dt.getDate();
+      html += `<td><button class="btn btn-xs ${hasReasons?'btn-primary':'btn-secondary'}"
+        onclick="openMuchakuModal('${member.id}',${i},'${dtLabel}')">${hasReasons?'✓':'入力'}</button></td>`;
+    });
+    html += `<td></td></tr>`;
+
+    // NG理由ボタン
+    html += `<tr><td class="label-col" style="color:#ef4444">NG理由</td>`;
+    dates.forEach((dt, i) => {
+      const hasReasons = hasNgReason(member.id, i);
+      const dtLabel = (dt.getMonth()+1)+'/'+ dt.getDate();
+      html += `<td><button class="btn btn-xs ${hasReasons?'btn-danger':'btn-secondary'}"
+        onclick="openNgModal('${member.id}',${i},'${dtLabel}')">${hasReasons?'✓':'入力'}</button></td>`;
+    });
+    html += `<td></td></tr>`;
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function renderMonthlyTable(wrap, members) {
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+  const dayHeaders = Array.from({length: daysInMonth}, (_, i) => `<th>${i+1}</th>`).join('');
+
+  let html = `<table class="daily-table">
+    <thead><tr>
+      <th class="label-col" style="min-width:100px">項目</th>
+      ${dayHeaders}
+      <th>合計</th>
+    </tr></thead><tbody>`;
+
+  members.forEach(member => {
+    const d = getMonthDayMemberData(member.id);
+    if (members.length > 1) {
+      html += `<tr><td colspan="${daysInMonth+2}" style="background:#1e293b;padding:8px 12px;font-weight:700;color:#6366f1;font-size:13px">👤 ${member.name}</td></tr>`;
+    }
+    METRICS.forEach(cat => {
+      html += `<tr><td class="cat-row" colspan="${daysInMonth+2}">${cat.cat}</td></tr>`;
+      cat.items.forEach(m => {
+        const arr = d[m.key] || Array(daysInMonth).fill(0);
+        const total = arr.reduce((a, b) => a + (parseInt(b)||0), 0);
+        const cells = arr.slice(0, daysInMonth).map((v, i) => {
+          const id = `minp_${member.id}_${m.key}_${i}`;
+          return `<td><input type="number" class="num-input" id="${id}" value="${parseInt(v)||0}" min="0"
+            style="width:32px;font-size:11px"
+            oninput="updateMonthDay('${member.id}','${m.key}',${i},this.value)"
+            onfocus="this.select()"></td>`;
+        }).join('');
+        html += `<tr><td class="label-col">${m.label}</td>${cells}<td class="total-col">${total}</td></tr>`;
+      });
+    });
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function updateWeekDay(memberId, key, idx, val) {
+  const d = getMemberDaily(memberId);
+  d[key][idx] = parseInt(val) || 0;
+  // 合計を即時更新（DOMを全体再描画せず、合計セルだけ更新）
+  updateWeekTotalCell(memberId, key);
+  saveData();
+}
+
+function updateWeekTotalCell(memberId, key) {
+  const d = getMemberDaily(memberId);
+  const arr = safeArr(d[key], 7);
+  const total = arr.reduce((a, b) => a + (parseInt(b)||0), 0);
+  // ヘッダー後のtotalセル（最後のtd）を更新
+  // 合計セルを特定するためにinputのIDパターンを使用
+  const sampleInput = document.getElementById(`inp_${memberId}_${key}_0`);
+  if (sampleInput) {
+    const row = sampleInput.closest('tr');
+    if (row) {
+      const lastTd = row.querySelector('td:last-child');
+      if (lastTd && !lastTd.querySelector('input')) lastTd.textContent = total;
+    }
+  }
+}
+
+function updateMonthDay(memberId, key, idx, val) {
+  const d = getMonthDayMemberData(memberId);
+  if (!d[key]) d[key] = [];
+  d[key][idx] = parseInt(val) || 0;
+  saveData();
+}
+
+// ============================================================
+// 無着地・NG理由モーダル
+// ============================================================
+let currentMuchakuMember = null;
+let currentMuchakuDay = null;
+let currentNgMember = null;
+let currentNgDay = null;
+
+function hasMuchakuReason(memberId, dayIdx) {
+  const w = getWeekData();
+  const key = `${memberId}_${dayIdx}`;
+  const reasons = (w.memberMuchakuReasons || {})[key] || {};
+  return MUCHAKU_REASONS.some((_, i) => parseInt(reasons[i]) > 0);
+}
+
+function hasNgReason(memberId, dayIdx) {
+  const w = getWeekData();
+  const key = `${memberId}_${dayIdx}`;
+  const reasons = (w.memberNgReasons || {})[key] || {};
+  return NG_REASONS.some((_, i) => parseInt(reasons[i]) > 0);
+}
+
+function openMuchakuModal(memberId, dayIdx, dateLabel) {
+  currentMuchakuMember = memberId;
+  currentMuchakuDay = dayIdx;
+  document.getElementById('muchakuModalTitle').textContent = `無着地理由 - ${dateLabel}`;
+  const w = getWeekData();
+  const key = `${memberId}_${dayIdx}`;
+  const reasons = ((w.memberMuchakuReasons || {})[key]) || {};
+
+  document.getElementById('muchakuModalGrid').innerHTML = MUCHAKU_REASONS.map((label, i) =>
+    `<div class="muchaku-modal-item">
+      <span class="ml">${label}</span>
+      <input type="number" class="muchaku-reason-input num-input" data-idx="${i}" value="${parseInt(reasons[i])||0}" min="0"
+        oninput="updateMuchakuTotal()">
+    </div>`
+  ).join('');
+  updateMuchakuTotal();
+  openModal('muchakuModal');
+}
+
+function updateMuchakuTotal() {
+  const inputs = document.querySelectorAll('.muchaku-reason-input');
+  let total = 0;
+  inputs.forEach(inp => { total += parseInt(inp.value) || 0; });
+  document.getElementById('muchakuModalTotal').textContent = total;
+}
+
+function saveMuchakuModal() {
+  const w = getWeekData();
+  if (!w.memberMuchakuReasons) w.memberMuchakuReasons = {};
+  const key = `${currentMuchakuMember}_${currentMuchakuDay}`;
+  const reasons = {};
+  document.querySelectorAll('.muchaku-reason-input').forEach(inp => {
+    reasons[inp.dataset.idx] = parseInt(inp.value) || 0;
+  });
+  w.memberMuchakuReasons[key] = reasons;
+
+  // 週全体の無着地サマリーも更新
+  const allReasons = {};
+  Object.values(w.memberMuchakuReasons).forEach(r => {
+    Object.entries(r).forEach(([i, v]) => { allReasons[i] = (allReasons[i]||0) + (parseInt(v)||0); });
+  });
+  w.review.muchakuReasons = allReasons;
+
+  saveData();
+  closeModal('muchakuModal');
+  renderDaily();
+  renderMuchakuBreakdown();
+  if (document.getElementById('tab-review').classList.contains('active')) renderReview();
+}
+
+function openNgModal(memberId, dayIdx, dateLabel) {
+  currentNgMember = memberId;
+  currentNgDay = dayIdx;
+  document.getElementById('ngModalTitle').textContent = `NG理由 - ${dateLabel}`;
+  const w = getWeekData();
+  const key = `${memberId}_${dayIdx}`;
+  const reasons = ((w.memberNgReasons || {})[key]) || {};
+
+  document.getElementById('ngModalGrid').innerHTML = NG_REASONS.map((label, i) =>
+    `<div class="muchaku-modal-item">
+      <span class="ml">${label}</span>
+      <input type="number" class="ng-reason-input num-input" data-idx="${i}" value="${parseInt(reasons[i])||0}" min="0"
+        oninput="updateNgTotal()">
+    </div>`
+  ).join('');
+  updateNgTotal();
+  openModal('ngModal');
+}
+
+function updateNgTotal() {
+  const inputs = document.querySelectorAll('.ng-reason-input');
+  let total = 0;
+  inputs.forEach(inp => { total += parseInt(inp.value) || 0; });
+  document.getElementById('ngModalTotal').textContent = total;
+}
+
+function saveNgModal() {
+  const w = getWeekData();
+  if (!w.memberNgReasons) w.memberNgReasons = {};
+  const key = `${currentNgMember}_${currentNgDay}`;
+  const reasons = {};
+  document.querySelectorAll('.ng-reason-input').forEach(inp => {
+    reasons[inp.dataset.idx] = parseInt(inp.value) || 0;
+  });
+  w.memberNgReasons[key] = reasons;
+
+  const allReasons = {};
+  Object.values(w.memberNgReasons).forEach(r => {
+    Object.entries(r).forEach(([i, v]) => { allReasons[i] = (allReasons[i]||0) + (parseInt(v)||0); });
+  });
+  w.review.ngReasons = allReasons;
+
+  saveData();
+  closeModal('ngModal');
+  renderDaily();
+  renderNgBreakdown();
+  if (document.getElementById('tab-review').classList.contains('active')) renderReview();
+}
+
+// ============================================================
+// 施策シート（レビュー）
+// ============================================================
+function renderReview() {
+  const w = getWeekData();
+  const review = w.review;
+  const mid = selectedMember !== 'all' ? selectedMember : null;
+  const mr = mid ? getMemberReview(mid) : review;
+
+  // フォーカスを保護してから値をセット
+  setInputIfNotFocused('mainIssue', mr.mainIssue || '');
+  setInputIfNotFocused('mainCause', mr.mainCause || '');
+  setInputIfNotFocused('topReasonAction', mr.topReasonAction || '');
+  setInputIfNotFocused('muchakuOther', review.muchakuOther || '');
+
+  // 原因別アクション
+  const causeWrap = document.getElementById('causeActionsWrap');
+  if (!causeWrap.children.length || causeWrap.dataset.rendered !== getWeekKey()) {
+    causeWrap.dataset.rendered = getWeekKey();
+    const cas = mr.causeActions || Array(5).fill(null).map(() => ({ cause: '', actions: [] }));
+    causeWrap.innerHTML = cas.map((ca, ci) => {
+      const actions = ca.actions || [];
+      return `<div class="cause-card">
+        <input class="cause-input" placeholder="原因${ci+1}" value="${esc(ca.cause||'')}" id="cause_${ci}"
+          oninput="saveCauseAction(${ci},'cause',this.value)">
+        <div class="action-list" id="actions_${ci}">
+          ${actions.map((a, ai) => renderActionRow(ci, ai, a)).join('')}
+        </div>
+        <button class="action-add-btn" onclick="addAction(${ci})">+ アクション追加</button>
+      </div>`;
+    }).join('');
+  } else {
+    // フォーカス保護しつつ値更新
+    const cas = mr.causeActions || [];
+    cas.forEach((ca, ci) => {
+      setInputIfNotFocused(`cause_${ci}`, ca.cause || '');
+    });
+  }
+
+  // 無着地・NG理由グリッド（レビュータブ用）
+  const muchakuReasons = review.muchakuReasons || {};
+  document.getElementById('reviewMuchakuGrid').innerHTML = MUCHAKU_REASONS.map((label, i) => {
+    const id = `rev_muchaku_${i}`;
+    const v = parseInt(muchakuReasons[i]) || 0;
+    return `<div class="reason-item">
+      <span class="reason-label">${label}</span>
+      <input type="number" class="num-input" id="${id}" value="${v}" min="0" style="width:56px"
+        oninput="updateReviewReason('muchaku',${i},this.value)">
+    </div>`;
+  }).join('');
+
+  const ngReasons = review.ngReasons || {};
+  document.getElementById('reviewNgGrid').innerHTML = NG_REASONS.map((label, i) => {
+    const id = `rev_ng_${i}`;
+    const v = parseInt(ngReasons[i]) || 0;
+    return `<div class="reason-item">
+      <span class="reason-label">${label}</span>
+      <input type="number" class="num-input" id="${id}" value="${v}" min="0" style="width:56px"
+        oninput="updateReviewReason('ng',${i},this.value)">
+    </div>`;
+  }).join('');
+
+  // メンバー別施策サマリー
+  const memberReviewWrap = document.getElementById('memberReviewSummary');
+  const members = getActiveMembers();
+  memberReviewWrap.innerHTML = members.map(m => {
+    const mr = getMemberReview(m.id);
+    return `<div style="margin-bottom:12px;padding:10px;background:#0f172a;border-radius:6px">
+      <div style="font-size:12px;font-weight:600;color:#6366f1;margin-bottom:6px">👤 ${m.name}</div>
+      <div style="font-size:11px;color:#94a3b8">課題: <span style="color:#e2e8f0">${mr.mainIssue||'未入力'}</span></div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:3px">原因: <span style="color:#e2e8f0">${mr.mainCause||'未入力'}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function getMemberReview(memberId) {
+  const w = getWeekData();
+  if (!w.memberReview) w.memberReview = {};
+  if (!w.memberReview[memberId]) {
+    w.memberReview[memberId] = {
+      mainIssue: '', mainCause: '', topReasonAction: '',
+      causeActions: Array(5).fill(null).map(() => ({ cause: '', actions: [] }))
+    };
+  }
+  return w.memberReview[memberId];
+}
+
+function renderActionRow(ci, ai, action) {
+  const a = typeof action === 'object' ? action : { text: action || '', done: false };
+  const id = `action_${ci}_${ai}`;
+  return `<div class="action-row" id="actionrow_${ci}_${ai}">
+    <input type="checkbox" ${a.done?'checked':''} onchange="toggleAction(${ci},${ai},this.checked)">
+    <input type="text" id="${id}" value="${esc(a.text||'')}" placeholder="アクション内容"
+      oninput="updateAction(${ci},${ai},this.value)">
+    <button class="btn btn-xs btn-danger" onclick="removeAction(${ci},${ai})">×</button>
+  </div>`;
+}
+
+function addAction(ci) {
+  const mr = getOrCreateMemberReview();
+  if (!mr.causeActions[ci]) mr.causeActions[ci] = { cause: '', actions: [] };
+  if (!mr.causeActions[ci].actions) mr.causeActions[ci].actions = [];
+  mr.causeActions[ci].actions.push({ text: '', done: false });
+  const actionList = document.getElementById(`actions_${ci}`);
+  const ai = mr.causeActions[ci].actions.length - 1;
+  actionList.insertAdjacentHTML('beforeend', renderActionRow(ci, ai, { text: '', done: false }));
+  document.getElementById(`action_${ci}_${ai}`)?.focus();
+  saveData();
+}
+
+function removeAction(ci, ai) {
+  const mr = getOrCreateMemberReview();
+  mr.causeActions[ci].actions.splice(ai, 1);
+  saveData();
+  document.getElementById(`actions_${ci}`).innerHTML = mr.causeActions[ci].actions.map((a, i) => renderActionRow(ci, i, a)).join('');
+}
+
+function toggleAction(ci, ai, done) {
+  const mr = getOrCreateMemberReview();
+  if (mr.causeActions[ci] && mr.causeActions[ci].actions[ai]) {
+    mr.causeActions[ci].actions[ai].done = done;
+    saveData();
+  }
+}
+
+function updateAction(ci, ai, val) {
+  const mr = getOrCreateMemberReview();
+  if (mr.causeActions[ci] && mr.causeActions[ci].actions[ai]) {
+    mr.causeActions[ci].actions[ai].text = val;
+    saveData();
+  }
+}
+
+function saveCauseAction(ci, field, val) {
+  const mr = getOrCreateMemberReview();
+  if (!mr.causeActions[ci]) mr.causeActions[ci] = { cause: '', actions: [] };
+  mr.causeActions[ci][field] = val;
+  saveData();
+}
+
+function getOrCreateMemberReview() {
+  const w = getWeekData();
+  const mid = selectedMember !== 'all' ? selectedMember : null;
+  if (mid) return getMemberReview(mid);
+  return w.review;
+}
+
+function saveReview() {
+  const w = getWeekData();
+  const mid = selectedMember !== 'all' ? selectedMember : null;
+  const target = mid ? getMemberReview(mid) : w.review;
+  target.mainIssue = document.getElementById('mainIssue').value;
+  target.mainCause = document.getElementById('mainCause').value;
+  target.topReasonAction = document.getElementById('topReasonAction').value;
+  w.review.muchakuOther = document.getElementById('muchakuOther').value;
+  saveData();
+}
+
+function updateReviewReason(type, idx, val) {
+  const w = getWeekData();
+  if (type === 'muchaku') {
+    if (!w.review.muchakuReasons) w.review.muchakuReasons = {};
+    w.review.muchakuReasons[idx] = parseInt(val) || 0;
+  } else {
+    if (!w.review.ngReasons) w.review.ngReasons = {};
+    w.review.ngReasons[idx] = parseInt(val) || 0;
+  }
+  saveData();
+}
+
+// ============================================================
+// 日報（ニッポ）
+// ============================================================
+function renderNippo() {
+  const w = getWeekData();
+  const dates = getWeekDates();
+  const members = selectedMember === 'all' ? getActiveMembers() : getActiveMembers().filter(m => m.id === selectedMember);
+
+  document.getElementById('nippoGrid').innerHTML = members.map(member =>
+    dates.map((d, i) => {
+      const key = `${member.id}_${i}`;
+      if (!w.nippo[key]) w.nippo[key] = { videoUrl: '', output: '', gratitude: '' };
+      const n = w.nippo[key];
+      const dayLabel = DAY_LABELS[i];
+      const dateStr = (d.getMonth()+1)+'/'+d.getDate();
+      return `<div class="nippo-card">
+        <h4>${member.name} - ${dateStr}（${dayLabel}）</h4>
+        <input id="nippo_video_${member.id}_${i}" placeholder="動画URL" value="${esc(n.videoUrl||'')}"
+          oninput="updateNippo('${member.id}',${i},'videoUrl',this.value)">
+        <textarea id="nippo_output_${member.id}_${i}" placeholder="アウトプット" rows="2"
+          oninput="updateNippo('${member.id}',${i},'output',this.value)">${esc(n.output||'')}</textarea>
+        <textarea id="nippo_grat_${member.id}_${i}" placeholder="感謝日記" rows="2"
+          oninput="updateNippo('${member.id}',${i},'gratitude',this.value)">${esc(n.gratitude||'')}</textarea>
+      </div>`;
+    }).join('')
+  ).join('');
+}
+
+function updateNippo(memberId, dayIdx, field, val) {
+  const w = getWeekData();
+  const key = `${memberId}_${dayIdx}`;
+  if (!w.nippo[key]) w.nippo[key] = { videoUrl: '', output: '', gratitude: '' };
+  w.nippo[key][field] = val;
+  saveData();
+}
+
+// ============================================================
+// Instagram
+// ============================================================
+function renderInstagram() {
+  const accounts = getAccounts();
+
+  // アカウントセレクト更新
+  const sel = document.getElementById('igAccountSelect');
+  const prevVal = sel.value;
+  sel.innerHTML = '<option value="all">全アカウント</option>';
+  accounts.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.id; opt.textContent = a.name;
+    sel.appendChild(opt);
+  });
+  sel.value = prevVal;
+
+  const selectedAccId = sel.value;
+  const filteredAccounts = selectedAccId === 'all' ? accounts : accounts.filter(a => a.id === selectedAccId);
+
+  const dates = getWeekDates();
+  const w = getWeekData();
+
+  let html = '';
+  filteredAccounts.forEach(acc => {
+    if (!w.instagram[acc.id]) {
+      w.instagram[acc.id] = {};
+      IG_METRICS.forEach(m => { w.instagram[acc.id][m.key] = [0,0,0,0,0,0,0]; });
+    }
+    const ig = w.instagram[acc.id];
+
+    const dayHeaders = dates.map((d, i) => {
+      const md = (d.getMonth()+1)+'/'+d.getDate();
+      return `<th>${md}</th>`;
+    }).join('');
+
+    html += `<div style="margin-bottom:20px">
+      <div style="font-size:14px;font-weight:600;color:#6366f1;margin-bottom:8px">${acc.name}</div>
+      <table class="ig-table"><thead><tr>
+        <th style="text-align:left;min-width:90px">項目</th>${dayHeaders}<th>合計</th>
+      </tr></thead><tbody>`;
+
+    IG_METRICS.forEach(m => {
+      const arr = safeArr(ig[m.key], 7);
+      const total = arr.reduce((a, b) => a + (parseInt(b)||0), 0);
+      const cells = arr.map((v, i) => {
+        const id = `ig_${acc.id}_${m.key}_${i}`;
+        return `<td><input type="number" class="num-input" id="${id}" value="${parseInt(v)||0}" min="0"
+          oninput="updateIg('${acc.id}','${m.key}',${i},this.value)" onfocus="this.select()" style="width:36px"></td>`;
+      }).join('');
+      html += `<tr><td style="text-align:left;padding-left:8px;font-size:12px">${m.label}</td>${cells}<td class="total-col">${total}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  });
+
+  document.getElementById('igTableWrap').innerHTML = html || '<div style="color:#64748b;padding:16px">アカウントがありません</div>';
+
+  // IG KPI
+  const totals = {};
+  IG_METRICS.forEach(m => { totals[m.key] = 0; });
+  filteredAccounts.forEach(acc => {
+    const ig = (w.instagram[acc.id]) || {};
+    IG_METRICS.forEach(m => {
+      totals[m.key] += arrSum(ig[m.key]);
+    });
+  });
+  const goals = data.settings.igGoals || DEFAULT_IG_GOALS;
+  const pct = (a,b) => b>0 ? Math.round(a/b*100)+'%' : '-';
+  document.getElementById('igKpiRow').innerHTML = [
+    ['DM返信率', pct(totals.dmReply, totals.dmSend)],
+    ['オファー率', pct(totals.igOffer, totals.dmReply)],
+    ['アポ獲得率', pct(totals.igApoGet, totals.igOffer)],
+    ['動員実施率', pct(totals.igDoinExec, totals.igApoExec)],
+    ['成約率', pct(totals.igSeiyaku, totals.igDoinExec)]
+  ].map(([label, val]) => `<div class="kpi-item"><div class="label">${label}</div><div class="value">${val}</div></div>`).join('');
+}
+
+function updateIg(accountId, key, idx, val) {
+  const w = getWeekData();
+  if (!w.instagram[accountId]) w.instagram[accountId] = {};
+  if (!w.instagram[accountId][key]) w.instagram[accountId][key] = [0,0,0,0,0,0,0];
+  w.instagram[accountId][key][idx] = parseInt(val) || 0;
+  saveData();
+}
+
+// ============================================================
+// 設定
+// ============================================================
+function renderSettings() {
+  const s = data.settings;
+
+  // 週次目標
+  const budgetKeys = [
+    { key: 'post', label: '投稿数' },
+    { key: 'apoGet', label: 'アポ獲得' },
+    { key: 'apoExec', label: 'アポ実施' },
+    { key: 'doinGet', label: '動員直クロ獲得' },
+    { key: 'doinExec', label: '動員直クロ実施' },
+    { key: 'mendanGet', label: '面談獲得' },
+    { key: 'mendanExec', label: '面談実施' },
+    { key: 'seiyaku', label: '成約' }
+  ];
+
+  document.getElementById('budgetGoalGrid').innerHTML = budgetKeys.map(({ key, label }) =>
+    `<div class="setting-item"><label>${label}</label>
+    <input type="number" id="budget_${key}" value="${s.budget?.[key]||0}" min="0"
+      oninput="updateGoal('budget','${key}',this.value)"></div>`
+  ).join('');
+
+  document.getElementById('monthlyGoalGrid').innerHTML = budgetKeys.map(({ key, label }) =>
+    `<div class="setting-item"><label>${label}</label>
+    <input type="number" id="monthly_${key}" value="${s.monthly?.[key]||0}" min="0"
+      oninput="updateGoal('monthly','${key}',this.value)"></div>`
+  ).join('');
+
+  // IGゴール
+  const igGoalKeys = [
+    { key: 'send', label: 'DM送信数' },
+    { key: 'reply', label: 'DM返信数' },
+    { key: 'offer', label: 'オファー数' },
+    { key: 'apoGet', label: 'アポ獲得' },
+    { key: 'apoExec', label: 'アポ実施' },
+    { key: 'doinExec', label: '動員実施' },
+    { key: 'seiyaku', label: '成約' }
+  ];
+  document.getElementById('igGoalGrid').innerHTML = igGoalKeys.map(({ key, label }) =>
+    `<div class="setting-item"><label>${label}</label>
+    <input type="number" id="iggoal_${key}" value="${s.igGoals?.[key]||0}" min="0"
+      oninput="updateIgGoal('${key}',this.value)"></div>`
+  ).join('');
+
+  // メンバーリスト
+  document.getElementById('memberListWrap').innerHTML = getActiveMembers().map(m =>
+    `<div class="member-list-item">
+      <span>👤 ${esc(m.name)}</span>
+      <button class="btn btn-xs btn-secondary" onclick="editMember('${m.id}')">編集</button>
+      <button class="btn btn-xs btn-danger" onclick="deleteMember('${m.id}')">削除</button>
+    </div>`
+  ).join('') || '<div style="color:#64748b;font-size:13px;padding:8px">メンバーなし</div>';
+
+  // アカウントリスト
+  document.getElementById('accountListWrap').innerHTML = getAccounts().map(a =>
+    `<div class="member-list-item">
+      <span>📱 ${esc(a.name)}</span>
+      <span class="mbadge" style="font-size:10px">${esc(a.url||'').slice(0,30)}</span>
+      <button class="btn btn-xs btn-danger" onclick="deleteAccount('${a.id}')">削除</button>
+    </div>`
+  ).join('') || '<div style="color:#64748b;font-size:13px;padding:8px">アカウントなし</div>';
+
+  // Firebase状態
+  document.getElementById('firebaseStatus').textContent =
+    `Firebase: ${TEAM_PATH} | 最終更新: ${data.lastUpdated ? new Date(data.lastUpdated).toLocaleString('ja-JP') : '未同期'}`;
+}
+
+function updateGoal(type, key, val) {
+  if (!data.settings[type]) data.settings[type] = {};
+  data.settings[type][key] = parseInt(val) || 0;
+  saveData();
+}
+
+function updateIgGoal(key, val) {
+  if (!data.settings.igGoals) data.settings.igGoals = {};
+  data.settings.igGoals[key] = parseInt(val) || 0;
+  saveData();
+}
+
+// ============================================================
+// メンバー管理
+// ============================================================
+function openAddMember() {
+  editingMemberId = null;
+  document.getElementById('addMemberTitle').textContent = 'メンバー追加';
+  document.getElementById('newMemberName').value = '';
+  openModal('addMemberModal');
+  setTimeout(() => document.getElementById('newMemberName').focus(), 100);
+}
+
+function editMember(id) {
+  editingMemberId = id;
+  const m = getMembers().find(m => m.id === id);
+  document.getElementById('addMemberTitle').textContent = 'メンバー編集';
+  document.getElementById('newMemberName').value = m?.name || '';
+  openModal('addMemberModal');
+  setTimeout(() => document.getElementById('newMemberName').focus(), 100);
+}
+
+function saveMember() {
+  const name = document.getElementById('newMemberName').value.trim();
+  if (!name) return;
+  if (editingMemberId) {
+    const m = getMembers().find(m => m.id === editingMemberId);
+    if (m) m.name = name;
+  } else {
+    getMembers().push({ id: 'member_' + Date.now(), name });
+  }
+  saveData();
+  closeModal('addMemberModal');
+  renderMemberSelect();
+  renderSettings();
+}
+
+function deleteMember(id) {
+  if (!confirm('メンバーを削除しますか？（データは残ります）')) return;
+  const idx = getMembers().findIndex(m => m.id === id);
+  if (idx >= 0) getMembers().splice(idx, 1);
+  saveData();
+  renderMemberSelect();
+  renderSettings();
+}
+
+// ============================================================
+// アカウント管理
+// ============================================================
+function openAddAccount() {
+  document.getElementById('newAccountName').value = '';
+  document.getElementById('newAccountUrl').value = '';
+  openModal('addAccountModal');
+  setTimeout(() => document.getElementById('newAccountName').focus(), 100);
+}
+
+function saveAccount() {
+  const name = document.getElementById('newAccountName').value.trim();
+  const url = document.getElementById('newAccountUrl').value.trim();
+  if (!name) return;
+  getAccounts().push({ id: 'acc_' + Date.now(), name, url });
+  saveData();
+  closeModal('addAccountModal');
+  renderSettings();
+  renderInstagram();
+}
+
+function deleteAccount(id) {
+  if (!confirm('アカウントを削除しますか？')) return;
+  const idx = getAccounts().findIndex(a => a.id === id);
+  if (idx >= 0) getAccounts().splice(idx, 1);
+  saveData();
+  renderSettings();
+  renderInstagram();
+}
+
+// ============================================================
+// データエクスポート・インポート
+// ============================================================
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sales-tracker-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (confirm('データをインポートします。現在のデータは上書きされます。よろしいですか？')) {
+        data = imported;
+        normalizeData();
+        saveData();
+        renderAll();
+        alert('インポート完了しました。');
+      }
+    } catch(err) {
+      alert('インポートエラー: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ============================================================
+// UI ヘルパー
+// ============================================================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// クリックでモーダルを閉じる
+document.querySelectorAll('.modal').forEach(modal => {
+  modal.addEventListener('click', e => {
+    if (e.target === modal) closeModal(modal.id);
+  });
+});
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// フォーカス中の入力欄は更新しない（データ保存バグ修正の重要部分）
+function setInputIfNotFocused(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (document.activeElement === el) return; // フォーカス中はスキップ
+  if (el.tagName === 'TEXTAREA') {
+    el.value = value;
+  } else {
+    el.value = value;
+  }
+}
+
+function setSyncStatus(state) {
+  const dot = document.getElementById('syncDot');
+  const text = document.getElementById('syncText');
+  if (state === 'ok') { dot.className='sync-dot'; text.textContent='同期済み'; }
+  else if (state === 'saving') { dot.className='sync-dot saving'; text.textContent='保存中...'; }
+  else if (state === 'error') { dot.className='sync-dot error'; text.textContent='保存エラー'; }
+}
+
+let saveIndicatorTimer = null;
+function showSaveIndicator(state) {
+  const el = document.getElementById('saveIndicator');
+  el.className = 'show ' + state;
+  el.textContent = state === 'saving' ? '💾 保存中...' : state === 'saved' ? '✓ 保存完了' : '⚠ 保存エラー';
+  el.style.display = 'block';
+  if (saveIndicatorTimer) clearTimeout(saveIndicatorTimer);
+  if (state !== 'saving') {
+    saveIndicatorTimer = setTimeout(() => { el.style.display = 'none'; }, 2000);
+  }
+}
+
+// Enterキーでモーダルを送信
+document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('newMemberName').addEventListener('keydown', e => { if (e.key === 'Enter') saveMember(); });
+</script>
+</body>
+</html>
