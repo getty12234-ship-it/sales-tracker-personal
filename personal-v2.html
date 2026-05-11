@@ -906,12 +906,69 @@ auth.onAuthStateChanged(user => {
 });
 
 // ============================================================
+// 5月動画データ（2026年5月1〜31日分）
+// ============================================================
+const MAY_2026_VIDEOS = {
+  "2026-5-1":  "https://www.youtube.com/watch?v=vbO4QV6YHcA",
+  "2026-5-2":  "https://www.youtube.com/watch?v=c5tDSRWfYW4",
+  "2026-5-3":  "https://www.youtube.com/watch?v=XBIIboS5BpU",
+  "2026-5-4":  "https://www.youtube.com/watch?v=dIPLsgcEhDA",
+  "2026-5-5":  "https://www.youtube.com/watch?v=B0HAllPbsWc",
+  "2026-5-6":  "https://www.youtube.com/watch?v=9qweN6EdazM",
+  "2026-5-7":  "https://www.youtube.com/watch?v=4OEUXIAXq7Y",
+  "2026-5-8":  "https://www.youtube.com/watch?v=25kaYZgDPGU",
+  "2026-5-9":  "https://www.youtube.com/watch?v=TxzSPD22wSs",
+  "2026-5-10": "https://www.youtube.com/watch?v=ryLdka2k7TE",
+  "2026-5-11": "https://www.youtube.com/watch?v=ZrKGy2wxlWQ",
+  "2026-5-12": "https://www.youtube.com/watch?v=UW-df2PuJq0",
+  "2026-5-13": "https://www.youtube.com/watch?v=KmM0DmUebto",
+  "2026-5-14": "https://www.youtube.com/watch?v=oMg3i9wH4jU",
+  "2026-5-15": "https://www.youtube.com/watch?v=BKfZW_ktnoo",
+  "2026-5-16": "https://www.youtube.com/watch?v=gj53Qh3yskA",
+  "2026-5-17": "https://www.youtube.com/watch?v=-ZfcmGWMuQc",
+  "2026-5-18": "https://www.youtube.com/watch?v=LHak3x3RJZk",
+  "2026-5-19": "https://www.youtube.com/watch?v=6dEtGI8NSH8",
+  "2026-5-20": "https://www.youtube.com/watch?v=W0bX_fv5Xg0",
+  "2026-5-21": "https://www.youtube.com/watch?v=bXDB42bFtaA",
+  "2026-5-22": "https://www.youtube.com/watch?v=020Jq26LHSU",
+  "2026-5-23": "https://www.youtube.com/watch?v=rXIH59YWcLk",
+  "2026-5-24": "https://www.youtube.com/watch?v=43HkuQ8PU0Y",
+  "2026-5-25": "https://www.youtube.com/watch?v=t2BdftcW_mY",
+  "2026-5-26": "https://www.youtube.com/watch?v=rjUwAv_07Xg",
+  "2026-5-27": "https://www.youtube.com/watch?v=fzG04vDy_uQ",
+  "2026-5-28": "https://www.youtube.com/watch?v=OuTyfawb0YA",
+  "2026-5-29": "https://www.youtube.com/watch?v=T4Au8MWCBBE",
+  "2026-5-30": "https://www.youtube.com/watch?v=-X3OKEB6S30",
+  "2026-5-31": "https://www.youtube.com/watch?v=HRPkW_IUWcI"
+};
+
+// 5月動画を空の日付だけ埋める（既存データは上書きしない）
+function seedMayVideos() {
+  const mk = "2026-5";
+  if (!data.monthVideos) data.monthVideos = {};
+  if (!data.monthVideos[mk]) data.monthVideos[mk] = {};
+  const mv = data.monthVideos[mk];
+  let added = 0;
+  Object.entries(MAY_2026_VIDEOS).forEach(([dateStr, url]) => {
+    if (!mv[dateStr] || mv[dateStr].trim() === '') {
+      mv[dateStr] = url;
+      added++;
+    }
+  });
+  if (added > 0) {
+    console.log(`✅ 5月動画 ${added}本をシードしました`);
+    saveData();
+  }
+}
+
+// ============================================================
 // 初期化
 // ============================================================
 function initApp() {
   applySeasonalStyle();
   updatePeriodLabel();
   renderMemberSelect();
+  seedMayVideos(); // 5月動画を自動挿入
   renderAll();
 }
 
@@ -1747,17 +1804,40 @@ function renderNippo() {
   const dates = getWeekDates();
   const members = selectedMember === 'all' ? getActiveMembers() : getActiveMembers().filter(m => m.id === selectedMember);
 
+  // monthVideosから当日の動画を取得（全員共通）
+  const monthKey = `${currentYear}-${currentMonth}`;
+  const monthVideos = (data.monthVideos && data.monthVideos[monthKey]) || {};
+
   document.getElementById('nippoGrid').innerHTML = members.map(member =>
     dates.map((d, i) => {
       const key = `${member.id}_${i}`;
       if (!w.nippo[key]) w.nippo[key] = { videoUrl: '', output: '', gratitude: '' };
       const n = w.nippo[key];
       const dayLabel = DAY_LABELS[i];
-      const dateStr = (d.getMonth()+1)+'/'+d.getDate();
+      const displayDate = (d.getMonth()+1)+'/'+d.getDate();
+      const firebaseDateStr = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+
+      // 月次動画（共通）があれば優先表示、なければ個人入力欄
+      const sharedVideo = monthVideos[firebaseDateStr] || '';
+      const videoSrc = n.videoUrl || sharedVideo;
+
+      // YouTubeの埋め込みプレイヤーHTML
+      let embedHtml = '';
+      if (videoSrc) {
+        const ytMatch = videoSrc.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]+)/);
+        if (ytMatch) {
+          embedHtml = `<div style="position:relative;padding-bottom:56.25%;height:0;margin-bottom:8px;border-radius:6px;overflow:hidden">
+            <iframe src="https://www.youtube.com/embed/${ytMatch[1]}" style="position:absolute;top:0;left:0;width:100%;height:100%"
+              frameborder="0" allowfullscreen loading="lazy"></iframe></div>`;
+        }
+      }
+
       return `<div class="nippo-card">
-        <h4>${member.name} - ${dateStr}（${dayLabel}）</h4>
-        <input id="nippo_video_${member.id}_${i}" placeholder="動画URL" value="${esc(n.videoUrl||'')}"
-          oninput="updateNippo('${member.id}',${i},'videoUrl',this.value)">
+        <h4>${member.name} - ${displayDate}（${dayLabel}）</h4>
+        ${embedHtml}
+        ${sharedVideo && !n.videoUrl ? `<div style="font-size:10px;color:#6366f1;margin-bottom:4px">📺 月次動画: ${sharedVideo.slice(0,40)}...</div>` : ''}
+        <input id="nippo_video_${member.id}_${i}" placeholder="動画URL（個人上書き）" value="${esc(n.videoUrl||'')}"
+          oninput="updateNippo('${member.id}',${i},'videoUrl',this.value)" style="font-size:11px">
         <textarea id="nippo_output_${member.id}_${i}" placeholder="アウトプット" rows="2"
           oninput="updateNippo('${member.id}',${i},'output',this.value)">${esc(n.output||'')}</textarea>
         <textarea id="nippo_grat_${member.id}_${i}" placeholder="感謝日記" rows="2"
