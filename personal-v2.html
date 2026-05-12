@@ -759,10 +759,25 @@ function doFirebaseSave() {
   if (!auth.currentUser) return;
   isFbSaving = true;
   setSyncStatus('saving');
-  const payload = JSON.parse(JSON.stringify(data));
-  payload.lastUpdated = Date.now();
-  db.ref(TEAM_PATH).set(payload)
+
+  const now = Date.now();
+  const wk = getWeekKey();
+  const mk = getMonthKey();
+
+  // .set()全上書きではなく.update()で差分だけ書き込む
+  // → 他デバイスや旧ツールの変更を上書きしない
+  const updates = {};
+  if (data.weeks?.[wk])           updates[`${TEAM_PATH}/weeks/${wk}`] = data.weeks[wk];
+  if (data.monthlyData?.[mk])     updates[`${TEAM_PATH}/monthlyData/${mk}`] = data.monthlyData[mk];
+  if (data.monthVideos?.[mk])     updates[`${TEAM_PATH}/monthVideos/${mk}`] = data.monthVideos[mk];
+  updates[`${TEAM_PATH}/settings`]     = data.settings;
+  updates[`${TEAM_PATH}/members`]      = data.members;
+  updates[`${TEAM_PATH}/accounts`]     = data.accounts || [];
+  updates[`${TEAM_PATH}/lastUpdated`]  = now;
+
+  db.ref('/').update(updates)
     .then(() => {
+      data.lastUpdated = now;
       isFbSaving = false;
       setSyncStatus('ok');
       showSaveIndicator('saved');
@@ -817,38 +832,42 @@ function setupFirebaseListener() {
     // 【核心の修正】自分の保存中はスキップ
     if (isFbSaving) return;
 
-    // 【核心の修正】ユーザーが最近（10秒以内）編集 AND ローカルが新しい場合はスキップ
+    // 【同期制御】自分が5秒以内に編集 AND ローカルが新しい場合はスキップ
     const localIsNewer = data.lastUpdated && fbData.lastUpdated && data.lastUpdated > fbData.lastUpdated;
-    const editedRecently = Date.now() - lastLocalEditMs < 10000;
-    if (localIsNewer && editedRecently) {
-      console.log('Firebase sync skipped: local data is newer and user is editing');
-      return;
-    }
+    const editedRecently = Date.now() - lastLocalEditMs < 5000; // 10s→5sに短縮
+    if (localIsNewer && editedRecently) return;
 
-    // Firebaseデータを適用
+    // Firebaseデータをマージ（現在週・現在月以外のデータは保持する）
     const prevFocusId = document.activeElement?.id;
     const prevFocusValue = document.activeElement?.value;
 
-    data = fbData;
+    // 完全置換ではなくマージ（自分の書き込み中の週が消えないよう）
+    if (!data.weeks) data.weeks = {};
+    if (fbData.weeks) Object.assign(data.weeks, fbData.weeks);
+    if (fbData.monthlyData) { if (!data.monthlyData) data.monthlyData = {}; Object.assign(data.monthlyData, fbData.monthlyData); }
+    if (fbData.monthVideos) { if (!data.monthVideos) data.monthVideos = {}; Object.assign(data.monthVideos, fbData.monthVideos); }
+    if (fbData.settings) data.settings = fbData.settings;
+    if (fbData.members) data.members = Array.isArray(fbData.members) ? fbData.members : Object.values(fbData.members);
+    if (fbData.accounts) data.accounts = Array.isArray(fbData.accounts) ? fbData.accounts : Object.values(fbData.accounts);
+    if (fbData.lastUpdated) data.lastUpdated = fbData.lastUpdated;
     normalizeData();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     setSyncStatus('ok');
 
-    // 表示を更新
-    renderAll();
-
-    // フォーカスしていた入力欄を復元（最重要：入力中に画面が更新されても入力が消えない）
-    if (prevFocusId) {
-      requestAnimationFrame(() => {
-        const el = document.getElementById(prevFocusId);
-        if (el) {
-          el.focus();
-          if (el.value !== prevFocusValue && prevFocusValue !== undefined) {
-            el.value = prevFocusValue;
+    // デバウンスで描画（連続Firebaseイベントでも最大800ms間隔）
+    if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+    renderDebounceTimer = setTimeout(() => {
+      renderAll();
+      if (prevFocusId) {
+        requestAnimationFrame(() => {
+          const el = document.getElementById(prevFocusId);
+          if (el) {
+            el.focus();
+            if (el.value !== prevFocusValue && prevFocusValue !== undefined) el.value = prevFocusValue;
           }
-        }
-      });
-    }
+        });
+      }
+    }, 800);
   });
 }
 
@@ -1031,42 +1050,60 @@ function onMemberChange() {
   renderAll();
 }
 
+let currentTab = 'summary'; // 現在表示中のタブを追跡
+
 function switchTab(id) {
+  currentTab = id;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === id));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + id));
+  renderActiveTab(); // タブ切り替え時にそのタブだけ描画
+}
+
+function renderActiveTab() {
+  // アクティブなタブだけ描画（非表示タブはスキップ → 大幅に軽量化）
+  switch(currentTab) {
+    case 'summary':   renderSummary();   break;
+    case 'daily':     renderDaily();     break;
+    case 'review':    renderReview();    break;
+    case 'nippo':     renderNippo();     break;
+    case 'instagram': renderInstagram(); break;
+    case 'settings':  renderSettings();  break;
+  }
 }
 
 // ============================================================
-// 全体レンダリング（フォーカス保護付き）
+// 全体レンダリング（フォーカス保護付き・アクティブタブのみ）
 // ============================================================
+let renderDebounceTimer = null;
+
 function renderAll() {
-  // フォーカス中の要素とその値を記憶（Firebase sync後に完全復元するため）
+  // フォーカス中の要素とその値を記憶
   const focusedEl = document.activeElement;
   const focusedId = focusedEl?.id;
   const focusedValue = (focusedEl && (focusedEl.tagName === 'INPUT' || focusedEl.tagName === 'TEXTAREA'))
     ? focusedEl.value : undefined;
 
   renderMemberSelect();
-  renderSummary();
-  renderDaily();
-  renderReview();
-  renderNippo();
-  renderInstagram();
-  renderSettings();
+  renderActiveTab(); // アクティブタブだけ描画（全タブ描画しない）
 
-  // フォーカスと入力値を復元（最重要: ユーザーが入力中でも値が消えない）
+  // フォーカスと入力値を復元
   if (focusedId) {
     requestAnimationFrame(() => {
       const el = document.getElementById(focusedId);
       if (el) {
         el.focus();
-        // ユーザーが入力中だった値を復元（dataからの再描画で上書きされた場合）
         if (focusedValue !== undefined && el.value !== focusedValue) {
           el.value = focusedValue;
         }
       }
     });
   }
+}
+
+function renderAllDebounced() {
+  // Firebase sync時はデバウンスして連続レンダリングを防ぐ
+  if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+  renderDebounceTimer = setTimeout(() => renderAll(), 800);
 }
 
 // ============================================================
@@ -1821,21 +1858,28 @@ function renderNippo() {
       const sharedVideo = monthVideos[firebaseDateStr] || '';
       const videoSrc = n.videoUrl || sharedVideo;
 
-      // YouTubeの埋め込みプレイヤーHTML
+      // YouTubeサムネイル＋クリックで再生（iframeを最初から全部ロードしない → 軽量化）
       let embedHtml = '';
       if (videoSrc) {
         const ytMatch = videoSrc.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]+)/);
         if (ytMatch) {
-          embedHtml = `<div style="position:relative;padding-bottom:56.25%;height:0;margin-bottom:8px;border-radius:6px;overflow:hidden">
-            <iframe src="https://www.youtube.com/embed/${ytMatch[1]}" style="position:absolute;top:0;left:0;width:100%;height:100%"
-              frameborder="0" allowfullscreen loading="lazy"></iframe></div>`;
+          const vid = ytMatch[1];
+          embedHtml = `<div class="yt-thumb" id="yt_${member.id}_${i}" onclick="playYoutube('${member.id}','${i}','${vid}')"
+            style="position:relative;cursor:pointer;margin-bottom:8px;border-radius:6px;overflow:hidden;background:#000">
+            <img src="https://img.youtube.com/vi/${vid}/mqdefault.jpg" style="width:100%;height:auto;display:block;opacity:.85">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+              <div style="width:52px;height:52px;background:rgba(255,0,0,.9);border-radius:50%;display:flex;align-items:center;justify-content:center">
+                <span style="color:white;font-size:20px;margin-left:4px">▶</span>
+              </div>
+            </div>
+          </div>`;
         }
       }
 
       return `<div class="nippo-card">
         <h4>${member.name} - ${displayDate}（${dayLabel}）</h4>
         ${embedHtml}
-        ${sharedVideo && !n.videoUrl ? `<div style="font-size:10px;color:#6366f1;margin-bottom:4px">📺 月次動画: ${sharedVideo.slice(0,40)}...</div>` : ''}
+        ${sharedVideo && !n.videoUrl ? `<div style="font-size:10px;color:#6366f1;margin-bottom:4px">📺 月次動画</div>` : ''}
         <input id="nippo_video_${member.id}_${i}" placeholder="動画URL（個人上書き）" value="${esc(n.videoUrl||'')}"
           oninput="updateNippo('${member.id}',${i},'videoUrl',this.value)" style="font-size:11px">
         <textarea id="nippo_output_${member.id}_${i}" placeholder="アウトプット" rows="2"
@@ -1845,6 +1889,15 @@ function renderNippo() {
       </div>`;
     }).join('')
   ).join('');
+}
+
+// サムネイルクリックでiframeに差し替え（その1枚だけロード）
+function playYoutube(memberId, dayIdx, videoId) {
+  const container = document.getElementById(`yt_${memberId}_${dayIdx}`);
+  if (!container) return;
+  container.outerHTML = `<div style="position:relative;padding-bottom:56.25%;height:0;margin-bottom:8px;border-radius:6px;overflow:hidden">
+    <iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" style="position:absolute;top:0;left:0;width:100%;height:100%"
+      frameborder="0" allowfullscreen allow="autoplay"></iframe></div>`;
 }
 
 function updateNippo(memberId, dayIdx, field, val) {
